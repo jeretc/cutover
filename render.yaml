@@ -1,0 +1,17 @@
+# Render blueprint: one free Docker web service. Secrets are entered in the Render dashboard (sync: false), never stored here.
+services:
+  - type: web
+    name: cutover
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - { key: PAYPAL_CLIENT_ID, sync: false }
+      - { key: PAYPAL_CLIENT_SECRET, sync: false }
+      - { key: PAYPAL_NVP_USER, sync: false }
+      - { key: PAYPAL_NVP_PWD, sync: false }
+      - { key: PAYPAL_NVP_SIGNATURE, sync: false }
+      - { key: PAYPAL_BUYER_EMAIL, sync: false }
+      - { key: PAYPAL_BUYER_PASSWORD, sync: false }
+      - { key: PAYPAL_WEBHOOK_ID, sync: false }
+      - { key: ADMIN_TOKEN, generateValue: true }

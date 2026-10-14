@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cutover</title>
+<meta name="description" content="Migrate legacy PayPal code, and prove it still pays.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cpath d=%27M16 3l13 13-13 13L3 16z%27 fill=%27%23ff5a1f%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="hazard"></div>
+<nav><div class="wrap">
+  <a class="brand" href="#top"><i></i>Cutover</a>
+  <a class="l" href="#discover">Discover</a><a class="l" href="#rewrite">Rewrite</a><a class="l" href="#repair">Repair</a><a class="l" href="#prove">Prove</a><a class="l live" href="#live">Try it live</a>
+</div></nav>
+
+<main id="top">
+<header class="hero wrap">
+  <div>
+    <div class="kicker"><b>RUNBOOK</b>Legacy PayPal to modern PayPal</div>
+    <h1>Cutover day is the <em>scariest</em> day.</h1>
+    <p class="lead">Cutover rewrites an old PayPal integration to the modern one, then proves in the sandbox that it still pays. Go or no-go, with evidence.</p>
+  </div>
+  <div class="board" id="board" aria-label="Go / no-go board"></div>
+</header>
+
+<section class="step wrap" id="live">
+  <div class="tag-line"><b>LIVE</b>Not a recording. Pay in the sandbox.</div>
+  <h2>Try both shops yourself</h2>
+  <p class="sub">Same products, same buyer, two generations of code. Buy something in the old shop, then in the migrated shop. Every payment lands in the sandbox and shows up below.</p>
+  <div class="shops">
+    <div class="shop">
+      <div class="badge">Before</div><h3>Old shop</h3>
+      <p>Classic checkout.js v4 and the NVP API, the way thousands of shops still work.</p>
+      <a class="btn ghost" href="/legacy/" target="_blank" rel="noopener">Open old shop ↗</a>
+    </div>
+    <div class="shop new">
+      <div class="badge">After, written by Cutover</div><h3>Migrated shop</h3>
+      <p>Orders v2, PayPal's PHP Server SDK and JS SDK v6. Same behaviour, proven by the checks below.</p>
+      <a class="btn" href="/shop/" target="_blank" rel="noopener">Open migrated shop ↗</a>
+    </div>
+  </div>
+  <div class="buyer" id="buyer" hidden>
+    <div class="k">Sandbox buyer email</div><div class="v"><span id="b-email"></span><button data-copy="b-email">Copy</button></div>
+    <div class="k">Sandbox buyer password</div><div class="v"><span id="b-pass"></span><button data-copy="b-pass">Copy</button></div>
+  </div>
+  <div class="panel feed" id="feed" hidden>
+    <div class="head"><span><i></i>Live payments</span><span>sandbox</span></div>
+    <div id="feed-body"></div>
+  </div>
+  <p class="note">Sandbox only: fake buyer, fake money. This project is not affiliated with or endorsed by PayPal.</p>
+</section>
+
+<section class="step wrap" id="discover">
+  <div class="tag-line"><b>STEP 01</b>Discover</div>
+  <h2>What is really in there</h2>
+  <p class="sub">A deterministic scan of the legacy shop. Each touchpoint shows what it is today, what it becomes, and how sure the mapping is. Anything it cannot map goes to a human, never guessed.</p>
+  <div class="panel">
+    <div class="toolbar">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-tp" aria-selected="true">PayPal touchpoints <span id="c-tp"></span></button>
+        <button class="tab" role="tab" id="tab-sec" aria-selected="false">Security findings <span id="c-sec"></span></button>
+      </div>
+      <input id="q" type="search" placeholder="Filter the table" aria-label="Filter the table">
+    </div>
+    <div id="grid"></div>
+  </div>
+</section>
+
+<section class="step wrap" id="rewrite">
+  <div class="tag-line"><b>STEP 02</b>Rewrite</div>
+  <h2>A diff a person can approve</h2>
+  <p class="sub">Nothing is applied automatically. The migrated shop goes to a separate folder and every change is listed here for review.</p>
+  <div class="panel split">
+    <div class="files" id="files"></div>
+    <div class="viewer"><div class="notes" id="notes"></div><div class="code" id="code" tabindex="0"></div></div>
+  </div>
+  <div class="flags" id="flags"></div>
+</section>
+
+<section class="step wrap" id="repair">
+  <div class="tag-line"><b>STEP 03</b>Check and repair</div>
+  <h2>The AI got it wrong. Cutover caught it.</h2>
+  <p class="sub">Real mistakes from real runs. Automatic checks found each one and sent the failure back to the model. The shop only moved on once every check was green.</p>
+  <div class="mist" id="mist"></div>
+</section>
+
+<section class="step wrap" id="prove">
+  <div class="tag-line"><b>STEP 04</b>Prove</div>
+  <h2>Proof, not trust</h2>
+  <p class="sub">The same seven scenarios ran against the old and migrated shops in a real browser, as a sandbox buyer. After every payment, PayPal itself was asked what happened.</p>
+  <div class="panel"><table class="proof" id="proof"></table></div>
+</section>
+</main>
+
+<footer><div class="hazard"></div><div class="wrap">
+  Built for the PayPal AI Hackathon. Re-run the proof yourself: <code>node agent/migrate.mjs</code> then <code>node scripts/scenarios.mjs</code>. See the README.
+</div></footer>
+
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
