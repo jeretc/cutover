@@ -23,7 +23,7 @@ const php = findPhp();
 for (const [prefix, s] of Object.entries(SHOPS)) {
   fs.mkdirSync(path.join(s.dir, "data"), { recursive: true });
   const child = spawn(php, ["-S", `127.0.0.1:${s.port}`, "-t", s.dir], {
-    stdio: "ignore",
+    stdio: ["ignore", "inherit", "inherit"],
     env: { ADMIN_TOKEN: process.env.ADMIN_TOKEN || "cutover-demo-admin", ...process.env, SHOP_BASE_URL: PUBLIC + prefix },
   });
   child.on("exit", (c) => console.log(`php for ${prefix} exited (${c})`));

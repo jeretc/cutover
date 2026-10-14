@@ -34,6 +34,7 @@ const mistakes = [
   { what: "Sent items PayPal rejects", detail: "Every product went to PayPal, including quantity 0. PayPal refuses those, and the error came back as an HTML page.", caught: "Contract check with the cart the page really sends.", fixed: "Zero-quantity items skipped; errors returned as JSON." },
   { what: "Crashed the whole shop", detail: "config.php stopped on load when an optional webhook setting was missing, so every page showed an error.", caught: "Smoke check of every endpoint.", fixed: "Optional settings are only required where they are used." },
   { what: "Dropped the cart UI", detail: "A cheaper fallback model deleted the quantity inputs and the cancel message.", caught: "Contract check: the page must keep its cart inputs and cancel handling.", fixed: "Restored by the repair loop." },
+  { what: "Read the wrong field in the webhook event", detail: "The AI looked for the order id at supplementary_data.related_resources[0].order.id. Real PayPal capture events put it at supplementary_data.related_ids.order_id, so the handler answered HTTP 400 to every real event.", caught: "The first real sandbox webhook after deploy (PayPal logged a delivery failure). Offline checks cannot see real events.", fixed: "One-line fix by a human, marked CUTOVER-HUMAN-FIX. The fact is now in the grounding and a static check guards it." },
 ];
 
 const data = {

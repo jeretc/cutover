@@ -132,7 +132,8 @@ try {
     switch ($eventType) {
         case 'PAYMENT.CAPTURE.COMPLETED':
             $captureId = $resource['id'] ?? null;
-            $orderId = $resource['supplementary_data']['related_resources'][0]['order']['id'] ?? null;
+            // CUTOVER-HUMAN-FIX: real capture events carry the order id in supplementary_data.related_ids.order_id (found by the first live sandbox webhook)
+            $orderId = $resource['supplementary_data']['related_ids']['order_id'] ?? $resource['supplementary_data']['related_resources'][0]['order']['id'] ?? null;
             $amountValue = $resource['amount']['value'] ?? null;
             $currencyCode = $resource['amount']['currency_code'] ?? null;
             $status = $resource['status'] ?? null;

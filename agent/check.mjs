@@ -26,6 +26,7 @@ export async function check(dir, port = 8090, expectText = []) {
   const text = (f) => fs.readFileSync(f, "utf8");
   const legacyLeft = files.filter((f) => !/paypal_nvp\.php$/.test(f) && /api-3t|paypal_nvp\(|_notify-validate|paypalobjects\.com\/api\/checkout/.test(text(f))).map((f) => path.relative(dir, f).replace(/\\/g, "/"));
   if (legacyLeft.length) fails.push(`Legacy PayPal code still referenced in: ${legacyLeft.join(", ")}`);
+  if (files.some((f) => !/vendor/.test(f) && /verify-webhook-signature/i.test(text(f)) && /PAYMENT\.CAPTURE\.COMPLETED/.test(text(f)) && !/related_ids/.test(text(f)))) fails.push("the webhook handler reads the order id from the wrong place. In a real PAYMENT.CAPTURE.COMPLETED event it is resource.supplementary_data.related_ids.order_id");
   if (!files.some((f) => !/vendor/.test(f) && /verify-webhook-signature/i.test(text(f)))) fails.push("no webhook handler verifies the webhook signature with PayPal (POST /v1/notifications/verify-webhook-signature)");
 
   // hallucination guard: every SDK controller the code asks for must exist in the installed package
