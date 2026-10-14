@@ -1,0 +1,24 @@
+{
+  "name": "cutover",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI migration agent: rewrites legacy PayPal code to Orders v2 + PHP Server SDK + JS SDK v6 and proves it in the sandbox",
+  "devDependencies": {
+    "diff": "^5.2.0",
+    "playwright": "^1.64.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "discover": "node agent/discover.mjs samples/legacy-php-shop proof/discovery.json",
+    "migrate": "node --env-file=.env.local agent/migrate.mjs samples/legacy-php-shop samples/migrated-php-shop-out proof/discovery.json",
+    "legacy-shop": "node --env-file=.env.local scripts/run-legacy-shop.mjs",
+    "migrated-shop": "node --env-file=.env.local scripts/run-legacy-shop.mjs samples/migrated-php-shop-out",
+    "prove": "node --env-file=.env.local scripts/scenarios.mjs",
+    "diff": "node scripts/diff-proof.mjs",
+    "build-web": "node scripts/build-web-data.mjs",
+    "start": "node --env-file=.env.local server/server.mjs"
+  }
+}

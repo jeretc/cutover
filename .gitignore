@@ -1,0 +1,20 @@
+node_modules/
+.next/
+out/
+build/
+.env
+.env.local
+.env.production
+.env*.local
+*.pem
+secrets/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+# Private working notes - never publish
+NOTES.md
+notes/
+vendor/
+samples/*/data/*.json
+samples/*/data/*.log
+*.log

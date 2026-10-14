@@ -1,0 +1,9 @@
+node_modules
+.env
+.env.*
+proof
+scripts
+samples/*/data
+samples/*/vendor
+agent/sdk-cache
+.git
