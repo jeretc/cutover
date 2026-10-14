@@ -26,7 +26,7 @@ nav a.l { font: 500 12px "IBM Plex Mono", monospace; text-transform: uppercase; 
 nav a.l:hover { color: var(--ink); } nav a.l.live { color: var(--ink); background: var(--hot); padding: 4px 9px; }
 @media (max-width: 700px) { nav a.l:not(.live) { display: none; } }
 
-.hero { padding: 56px 0 44px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 40px; align-items: end; }
+.hero { padding-top: 56px; padding-bottom: 44px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 40px; align-items: end; }
 @media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: 28px; } }
 .kicker { font: 500 12px "IBM Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 18px; }
 .kicker b { background: var(--bar); color: var(--bar-ink); padding: 3px 8px; margin-right: 8px; }
@@ -43,7 +43,7 @@ nav a.l:hover { color: var(--ink); } nav a.l.live { color: var(--ink); backgroun
 .row .n { font: 600 26px "Big Shoulders Display", sans-serif; text-align: right; white-space: nowrap; line-height: 1; }
 .row .n s { text-decoration: none; color: var(--muted); font-size: 20px; margin: 0 4px; }
 
-section.step { padding: 72px 0 0; }
+section.step { padding-top: 72px; }
 .tag-line { display: flex; align-items: center; gap: 12px; font: 500 12px "IBM Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 .tag-line b { background: var(--hot); color: var(--hot-ink); padding: 3px 9px; letter-spacing: .08em; }
 .tag-line::after { content: ""; flex: 1; border-top: 1px solid var(--hair); }
@@ -129,3 +129,25 @@ footer code { background: var(--panel); border: 1px solid var(--hair); padding: 
 #feed-body { overflow-x: auto; }
 .feed td:last-child { word-break: break-all; }
 @media (max-width: 600px) { .feed td, .feed th { padding: 8px 10px; } .hero h1 { font-size: clamp(52px, 17vw, 84px); } }
+
+@media (max-width: 600px) {
+  .buyer { grid-template-columns: 1fr; }
+  .buyer .k { padding-bottom: 6px; border-bottom: 0; }
+  .buyer > div:nth-last-child(-n+2) { border-bottom: 1px solid var(--hair); } .buyer > div:last-child { border-bottom: 0; }
+  .buyer .v { padding-top: 6px; }
+  .shop { padding: 18px; } .shop h3 { font-size: 38px; }
+  .step .sub { font-size: 15px; }
+  .tab { flex: 1; padding: 8px 6px; font-size: 11px; }
+  .toolbar input { max-width: none; margin-left: 0; width: 100%; }
+  .code { font-size: 11.5px; }
+}
+.ag-cell-wrap-text { line-height: 1.45; padding-top: 8px; padding-bottom: 8px; }
+
+/* scrollbars: thin, square, on-brand (page, code viewer, file list, AG Grid) */
+:root { --sb-thumb: #8a93a1; --sb-track: #dfe2e6; }
+@media (prefers-color-scheme: dark) { :root { --sb-thumb: #465061; --sb-track: #0f1318; } }
+@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) var(--sb-track); } }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--sb-track); }
+::-webkit-scrollbar-thumb { background: var(--sb-thumb); border: 3px solid var(--sb-track); border-radius: 0; min-height: 36px; min-width: 36px; }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background: var(--hot); }

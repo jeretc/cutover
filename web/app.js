@@ -50,13 +50,27 @@ fetch("data/cutover.json").then((r) => r.json()).then((d) => {
     { field: "why", headerName: "Why it matters", flex: 2.2, minWidth: 280, wrapText: true, autoHeight: true },
     { field: "fix", headerName: "Fix", flex: 2, minWidth: 260, wrapText: true, autoHeight: true },
   ];
-  const api = agGrid.createGrid($("#grid"), { theme, columnDefs: tpCols, rowData: d.touchpoints, tooltipShowDelay: 300, defaultColDef: { sortable: true, resizable: true, filter: true } });
+  const mq = matchMedia("(max-width: 700px)");
+  const tpSmall = [
+    { field: "legacy", headerName: "Today", flex: 1, minWidth: 150 },
+    { field: "modern", headerName: "Becomes", flex: 1.4, minWidth: 190 },
+    { field: "confidence", headerName: "Mapping", width: 118, cellRenderer: (p) => chip(p.value) },
+  ];
+  const secSmall = [
+    { field: "severity", headerName: "Severity", width: 126, cellRenderer: (p) => chip(p.value), comparator: (a, b) => sevOrder.indexOf(a) - sevOrder.indexOf(b), sort: "asc" },
+    { field: "title", headerName: "Finding", flex: 1, minWidth: 220, wrapText: true, autoHeight: true },
+  ];
+  let which = "tp";
+  const colsFor = () => (which === "tp" ? (mq.matches ? tpSmall : tpCols) : (mq.matches ? secSmall : secCols));
+  const api = agGrid.createGrid($("#grid"), { theme, columnDefs: mq.matches ? tpSmall : tpCols, rowData: d.touchpoints, tooltipShowDelay: 300, defaultColDef: { sortable: true, resizable: true, filter: true } });
   $("#c-tp").textContent = `(${d.touchpoints.length})`; $("#c-sec").textContent = `(${d.security.length})`;
-  const pick = (which) => {
-    $("#tab-tp").setAttribute("aria-selected", which === "tp"); $("#tab-sec").setAttribute("aria-selected", which === "sec");
-    api.setGridOption("columnDefs", which === "tp" ? tpCols : secCols);
-    api.setGridOption("rowData", which === "tp" ? d.touchpoints : d.security);
+  const pick = (w) => {
+    which = w;
+    $("#tab-tp").setAttribute("aria-selected", w === "tp"); $("#tab-sec").setAttribute("aria-selected", w === "sec");
+    api.setGridOption("columnDefs", colsFor());
+    api.setGridOption("rowData", w === "tp" ? d.touchpoints : d.security);
   };
+  mq.addEventListener("change", () => api.setGridOption("columnDefs", colsFor()));
   $("#tab-tp").onclick = () => pick("tp"); $("#tab-sec").onclick = () => pick("sec");
   $("#q").oninput = (e) => api.setGridOption("quickFilterText", e.target.value);
 
