@@ -1,7 +1,7 @@
 {
   "label": "live-legacy",
   "shop": "http://localhost:8080/legacy",
-  "at": "2026-10-14T10:09:17.285Z",
+  "at": "2026-10-14T14:20:05.835Z",
   "scenarios": {
     "S1-single-item": {
       "title": "Buy one tee",

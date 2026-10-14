@@ -1,6 +1,5 @@
 <?php
 // Tiny flat-file "database" for orders (legacy style).
-// CUTOVER-REVIEW: Order data is stored under the web root. For production, consider moving to a database or outside the web root.
 function orders_path() { return __DIR__ . '/../data/orders.json'; }
 function orders_all() {
     $p = orders_path();

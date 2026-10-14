@@ -2,13 +2,12 @@
 require_once __DIR__ . '/../config.php';
 header('Content-Type: application/json');
 
-$clientId = getenv('PAYPAL_CLIENT_ID');
-$clientSecret = getenv('PAYPAL_CLIENT_SECRET');
+$clientId = PAYPAL_CLIENT_ID;
+$clientSecret = PAYPAL_CLIENT_SECRET;
 
 if (!$clientId || !$clientSecret) {
-    error_log("PayPal client ID or secret not set in environment for client-token endpoint.");
     http_response_code(500);
-    echo json_encode(['error' => 'PayPal credentials missing.']);
+    echo json_encode(['error' => 'PayPal API credentials not configured.']);
     exit;
 }
 
@@ -23,19 +22,11 @@ $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
-if ($httpCode !== 200) {
-    error_log("Failed to get client token from PayPal. HTTP Status: $httpCode, Response: $response");
+if ($httpCode === 200) {
+    $data = json_decode($response, true);
+    echo json_encode(['clientToken' => $data['access_token']]);
+} else {
+    error_log("Failed to get client token: HTTP $httpCode - $response");
     http_response_code(502);
-    echo json_encode(['error' => 'Failed to get client token from PayPal.']);
-    exit;
+    echo json_encode(['error' => 'Failed to retrieve client token from PayPal.']);
 }
-
-$data = json_decode($response, true);
-if (!isset($data['access_token'])) {
-    error_log("PayPal client token response missing access_token: " . $response);
-    http_response_code(502);
-    echo json_encode(['error' => 'Invalid client token response from PayPal.']);
-    exit;
-}
-
-echo json_encode(['clientToken' => $data['access_token']]);

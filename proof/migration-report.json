@@ -1,202 +1,144 @@
 {
-  "at": "2026-10-14T10:43:22.667Z",
+  "at": "2026-10-14T14:13:26.622Z",
   "source": "samples/legacy-php-shop",
   "out": "samples/migrated-php-shop-out",
   "calls": [
     {
       "model": "gemini-2.5-flash",
-      "cached": true
+      "cached": false
     },
     {
-      "model": "gemini-2.5-flash",
-      "cached": true,
+      "model": "gemini-3.1-flash-lite",
+      "cached": false,
       "repair": 1
-    },
-    {
-      "model": "gemini-2.5-flash",
-      "cached": true,
-      "repair": 2
     }
   ],
   "filesChanged": [
     {
-      "path": "api/create-payment.php",
-      "changes": [
-        "Replaced `require_once __DIR__ . '/../lib/paypal_nvp.php';` with `require_once __DIR__ . '/../lib/paypal_sdk.php';`.",
-        "Replaced `paypal_nvp('SetExpressCheckout', ...)` with `PaypalServerSdkLib\\Models\\Builders` to construct an `OrderRequestBuilder` and call `$ordersController->createOrder()`.",
-        "Mapped cart items to `PurchaseUnitRequestBuilder` and `ItemBuilder` objects, ensuring quantity is a string.",
-        "Stored `SHOP_CURRENCY` with the order for later webhook verification.",
-        "Updated error handling to catch `ApiException` and `Exception`, returning HTTP 502 or 500 with JSON error messages.",
-        "Preserved the JSON response shape `{'token': orderId}` for frontend compatibility.",
-        "Modified the cart processing loop to skip items with quantity 0, as PayPal's Orders API rejects them. This prevents a fatal error when creating an order with zero-quantity items."
-      ]
-    },
-    {
-      "path": "api/execute-payment.php",
-      "changes": [
-        "Replaced `require_once __DIR__ . '/../lib/paypal_nvp.php';` with `require_once __DIR__ . '/../lib/paypal_sdk.php';`.",
-        "Implemented a replay guard: checks `order['status']` and returns existing transaction details if already `PAID`.",
-        "Replaced `paypal_nvp('GetExpressCheckoutDetails', ...)` with `$ordersController->getOrder()` to fetch order details.",
-        "Replaced `paypal_nvp('DoExpressCheckoutPayment', ...)` with `$ordersController->captureOrder()` to capture the payment.",
-        "Removed `payerID` from the capture call as it's not needed in Orders v2.",
-        "Updated `transaction_id` to store the PayPal Capture ID and `payer_email` from the order details.",
-        "Updated error handling to catch `ApiException` and `Exception`, returning HTTP 502 or 500 with JSON error messages.",
-        "Preserved the JSON response shape `{'ok':true,'transactionId','amount'}`."
-      ]
-    },
-    {
-      "path": "api/orders.php",
-      "changes": [
-        "Added authentication: requires `X-Admin-Token` header to match `ADMIN_TOKEN` environment variable. Returns HTTP 401 if unauthorized, or 500 if `ADMIN_TOKEN` is not set."
-      ]
-    },
-    {
-      "path": "api/refund.php",
-      "changes": [
-        "Replaced `require_once __DIR__ . '/../lib/paypal_nvp.php';` with `require_once __DIR__ . '/../lib/paypal_sdk.php';`.",
-        "Added authentication: requires `X-Admin-Token` header to match `ADMIN_TOKEN` environment variable. Returns HTTP 401 if unauthorized, or 500 if `ADMIN_TOKEN` is not set.",
-        "Replaced `paypal_nvp('RefundTransaction', ...)` with `$paymentsController->refundCapturedPayment()`.",
-        "Used the stored `transaction_id` (now the capture ID) for the refund call.",
-        "Used an empty body for `refundCapturedPayment` to perform a full refund, replacing `REFUNDTYPE => 'Full'`.",
-        "Updated `refund_id` to store the PayPal refund ID.",
-        "Updated error handling to catch `ApiException` and `Exception`, returning HTTP 502 or 500 with JSON error messages.",
-        "Preserved the JSON response shape `{'ok':true,'refundId'}`."
-      ]
-    },
-    {
       "path": "config.php",
       "changes": [
-        "Removed all NVP-related constants (`PAYPAL_API_USERNAME`, `PAYPAL_API_PASSWORD`, `PAYPAL_API_SIGNATURE`, `PAYPAL_NVP_ENDPOINT`, `PAYPAL_NVP_VERSION`, `PAYPAL_IPN_VERIFY_URL`).",
-        "Removed `SHOP_RECEIVER_EMAIL` as it is not used in the modern webhook flow.",
-        "Added comments indicating that modern credentials are read directly from environment variables in the relevant files, not defined here."
-      ]
-    },
-    {
-      "path": "index.php",
-      "changes": [
-        "Replaced `<script src=\"https://www.paypalobjects.com/api/checkout.js\"></script>` with `<script src=\"https://www.sandbox.paypal.com/web-sdk/v6/core\"></script>`.",
-        "Changed `<div id=\"paypal-button\"></div>` to `<paypal-button id=\"paypal-button\" type=\"pay\"></paypal-button>`.",
-        "Added an `async initPayPalButton()` function to encapsulate PayPal button initialization.",
-        "Added a `fetch('/api/client-token.php')` call to retrieve the client token for JS SDK v6 initialization.",
-        "Replaced `paypal.Button.render(...)` with `window.paypal.createInstance(...)` and `sdk.createPayPalOneTimePaymentSession(...)`.",
-        "Modified the `payment` callback to `createOrder()` which now `fetch`es `/api/create-payment.php` and expects `{ orderId: data.token }`.",
-        "Modified the `onAuthorize` callback to `onApprove()` which now `fetch`es `/api/execute-payment.php` with `data.orderId`.",
-        "Updated the button click handler to use `session.start({ presentationMode: 'popup' }, session.createOrder())`.",
-        "Preserved the DOM IDs and result texts for 'Payment complete', 'Payment cancelled', and 'Payment failed'.",
-        "Moved the `createOrder` function definition out of the `createPayPalOneTimePaymentSession` configuration object and made it a standalone function (`createOrderForSession`).",
-        "Updated the `paypal-button` click handler to call the new `createOrderForSession()` function and pass its returned Promise to `session.start()`, as required by JS SDK v6. This fixes the `TypeError: session.createOrder is not a function` and ensures the PayPal approval window opens correctly."
+        "Removed NVP API credentials (PAYPAL_API_USERNAME, PAYPAL_API_PASSWORD, PAYPAL_API_SIGNATURE, PAYPAL_NVP_ENDPOINT, PAYPAL_NVP_VERSION, PAYPAL_IPN_VERIFY_URL).",
+        "Added modern PayPal API credentials (PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET) and webhook ID (PAYPAL_WEBHOOK_ID) and ADMIN_TOKEN.",
+        "Ensured all new credentials are read exclusively from environment variables with no hardcoded fallbacks, failing loudly if missing."
       ]
     },
     {
       "path": "lib/orders_store.php",
       "changes": [
-        "Added a `CUTOVER-REVIEW` comment regarding storing order data under the web root, as per security findings, while preserving the existing storage mechanism as requested."
+        "No functional changes, preserving existing order storage mechanism as requested."
       ]
     },
     {
-      "path": "lib/paypal_nvp.php",
+      "path": "api/create-payment.php",
       "changes": [
-        "Commented out the entire file as it is obsolete and replaced by `lib/paypal_sdk.php`."
+        "Replaced NVP `SetExpressCheckout` with PayPal Orders v2 `createOrder` API call using the PHP Server SDK.",
+        "Constructed `OrderRequestBuilder` with `CAPTURE` intent and `PurchaseUnitRequestBuilder` for cart items and total.",
+        "Mapped legacy cart items to `ItemBuilder` objects, ensuring quantity is a string.",
+        "Updated order storage to save the new PayPal Order ID (as 'token') and currency.",
+        "Changed JSON response from `{\"token\": ...}` to `{\"id\": ...}` to align with JS SDK v6 expectations.",
+        "Implemented error handling using `handlePayPalApiException` for SDK errors."
+      ]
+    },
+    {
+      "path": "api/execute-payment.php",
+      "changes": [
+        "Implemented replay guard: checks `order['status']` before attempting capture, returning stored transaction if already `PAID`.",
+        "Replaced NVP `GetExpressCheckoutDetails` with `orders->getOrder()` to retrieve payer information.",
+        "Replaced NVP `DoExpressCheckoutPayment` with `orders->captureOrder()` to capture the approved order.",
+        "Updated input parameter from `token` and `payerID` to `orderId` to match JS SDK v6.",
+        "Updated order storage with the PayPal Capture ID (as 'transaction_id'), payer ID, and payer email.",
+        "Handled `ORDER_ALREADY_CAPTURED` (HTTP 422) error to ensure idempotency, retrieving existing capture ID if available.",
+        "Implemented error handling using `handlePayPalApiException` for SDK errors."
+      ]
+    },
+    {
+      "path": "api/orders.php",
+      "changes": [
+        "Implemented admin authentication by calling `authenticateAdmin()` from `lib/paypal_sdk.php`.",
+        "Requires `X-Admin-Token` header with `ADMIN_TOKEN` environment variable for access."
+      ]
+    },
+    {
+      "path": "api/refund.php",
+      "changes": [
+        "Implemented admin authentication by calling `authenticateAdmin()` from `lib/paypal_sdk.php`.",
+        "Replaced NVP `RefundTransaction` with `payments->refundCapturedPayment()` API call.",
+        "Uses the stored PayPal Capture ID (from `transaction_id`) for the refund.",
+        "Updated order storage with the new PayPal Refund ID.",
+        "Implemented error handling using `handlePayPalApiException` for SDK errors."
+      ]
+    },
+    {
+      "path": "index.php",
+      "changes": [
+        "Replaced `checkout.js v4` script tag with `JS SDK v6 core` script from `https://www.sandbox.paypal.com/web-sdk/v6/core`.",
+        "Changed `<div id=\"paypal-button\"></div>` to `<paypal-button id=\"paypal-button\" type=\"pay\"></paypal-button>`.",
+        "Added logic to fetch a client token from `/api/client-token.php` before initializing the SDK.",
+        "Replaced `paypal.Button.render` with `window.paypal.createInstance` and `sdk.createPayPalOneTimePaymentSession`.",
+        "Updated `payment` callback to `createOrder` function, which POSTs to `/api/create-payment.php` and expects `{\"id\": orderId}`.",
+        "Updated `onAuthorize` callback to `onApprove`, which receives `data.orderId` and POSTs it to `/api/execute-payment.php`.",
+        "Preserved `onCancel` handler verbatim.",
+        "Added `onError` handler for general SDK errors.",
+        "Added empty cart check in click handler to show message in #result",
+        "Catch rejected promise in session.start to prevent uncaught errors"
       ]
     },
     {
       "path": "ipn.php",
       "changes": [
-        "Commented out the entire file as it is obsolete and replaced by `webhook.php`."
-      ]
-    },
-    {
-      "path": "../migrated-php-shop-out/config.php",
-      "changes": [
-        "Removed commented-out legacy NVP API and IPN related constants."
-      ]
-    },
-    {
-      "path": "../migrated-php-shop-out/ipn.php",
-      "changes": [
-        "Removed all commented-out legacy IPN handling code, leaving only an obsolescence comment."
+        "Removed legacy IPN code as requested"
       ]
     }
   ],
   "filesAdded": [
     {
-      "path": "api/client-token.php",
+      "path": "lib/paypal_sdk.php",
       "changes": [
-        "New file: `api/client-token.php` created to mint a client token for the JS SDK v6.",
-        "Fetches `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` from environment variables.",
-        "Uses `curl` to make a POST request to `https://api-m.sandbox.paypal.com/v1/oauth2/token` with basic authentication.",
-        "Returns the `access_token` as `{'clientToken': ...}` or an error if token retrieval fails."
+        "New file: Replaces `lib/paypal_nvp.php` for modern PayPal SDK integration.",
+        "Initializes PayPal PHP Server SDK client using `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` from `config.php`.",
+        "Provides `handlePayPalApiException` for consistent error handling of SDK exceptions.",
+        "Includes `authenticateAdmin` helper function for securing admin endpoints with `ADMIN_TOKEN`."
       ]
     },
     {
-      "path": "lib/paypal_sdk.php",
+      "path": "api/client-token.php",
       "changes": [
-        "New file: `lib/paypal_sdk.php` created to initialize the PayPal PHP Server SDK client.",
-        "Includes `vendor/autoload.php` and necessary SDK classes.",
-        "Provides `getPaypalClient()`, `getPaypalOrdersController()`, and `getPaypalPaymentsController()` functions.",
-        "Reads `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` from environment variables, failing loudly if missing.",
-        "Includes `handlePaypalApiException()` helper for consistent error responses from SDK calls."
+        "New file: Provides a server-side endpoint to mint a client token for the PayPal JS SDK v6.",
+        "Uses `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` for Basic authentication to PayPal's OAuth2 token endpoint.",
+        "Returns `{\"clientToken\": \"...\"}` on success, or an error JSON on failure."
       ]
     },
     {
       "path": "webhook.php",
       "changes": [
-        "New file: `webhook.php` created to replace `ipn.php`.",
-        "Requires `PAYPAL_WEBHOOK_ID` from environment variables, failing with HTTP 500 if missing.",
-        "Implements webhook signature verification using `curl` to `https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature`.",
-        "Fetches an OAuth2 bearer token for webhook verification.",
+        "New file: Replaces `ipn.php` as the new webhook handler.",
+        "Verifies webhook signature using `PAYPAL_WEBHOOK_ID` and PayPal's `verify-webhook-signature` API.",
         "Handles `PAYMENT.CAPTURE.COMPLETED` events.",
-        "Includes a replay guard by storing processed event IDs in `data/processed_webhook_events.json`.",
-        "Verifies the `amount` and `currency_code` from the webhook event against the locally stored order data.",
-        "Updates the order status to 'PAID' and stores the capture ID as `transaction_id` if the event is valid and the order is not already paid.",
-        "Logs unhandled event types and acknowledges them with HTTP 200 to prevent retries."
+        "Performs security checks: matches capture to a stored order, verifies amount and currency.",
+        "Implements idempotency by ignoring duplicate events based on order status and transaction ID.",
+        "Updates order status to `PAID` and stores the PayPal Capture ID.",
+        "Logs unhandled event types and verification failures."
       ]
     }
   ],
   "flags": [
     {
-      "flag": "CUTOVER-REVIEW: Order data is stored under the web root (`data/orders.json`). For production, consider moving to a database or outside the web root for enhanced security."
+      "flag": "CUTOVER-REVIEW: The security finding 'Order data stored under the web root' (in `lib/orders_store.php` and `webhook.php` for logs) was preserved as per the rule 'Keep the shop's own endpoint URLs and the order JSON file layout'. A human should decide if this data storage method is acceptable or if a database migration is required."
     },
     {
-      "flag": "CUTOVER-REVIEW: The NVP parameters RETURNURL, CANCELURL, NOSHIPPING, LOCALECODE are not explicitly set in the server-side createOrder call for JS SDK v6. The JS SDK typically handles the experience context. If the shop relies on these being explicitly set on the server for specific behaviors (e.g., custom return/cancel pages after the PayPal flow, or specific shipping preferences), this might need review. If needed, they would be added via `payment_source.paypal.experience_context` in the `OrderRequest`."
-    },
-    {
-      "flag": "CUTOVER-REVIEW: The `ipn.log` file (used for IPN event logging) has been removed. If logging of payment events is a strict requirement, a new logging mechanism for webhooks should be implemented."
-    },
-    {
-      "flag": "CUTOVER-REVIEW: The `SHOP_RECEIVER_EMAIL` constant from `config.php` was used for IPN verification. It has been removed as there is no direct equivalent for this check in the modern webhook flow (signature verification and order matching replace it). If `SHOP_RECEIVER_EMAIL` had other uses in the application, those might need review."
-    },
-    {
-      "flag": "CUTOVER-REVIEW: The NVP parameters RETURNURL, CANCELURL, NOSHIPPING, LOCALECODE are not explicitly set in the server-side createOrder call for JS SDK v6. The JS SDK typically handles the experience context. If the shop relies on these being explicitly set on the server for specific behaviors (e.g., custom return/cancel pages after the PayPal flow, or specific shipping preferences), this might need review."
-    },
-    {
-      "flag": "CUTOVER-REVIEW: Order data is stored under the web root. For production, consider moving to a database or outside the web root."
-    },
-    {
-      "flag": "CUTOVER-REVIEW: This file (ipn.php) is entirely obsolete and has been replaced by webhook.php."
-    },
-    {
-      "flag": "CUTOVER-REVIEW: This file (lib/paypal_nvp.php) is entirely obsolete and has been replaced by lib/paypal_sdk.php."
+      "flag": "CUTOVER-REVIEW: The `SHOP_RECEIVER_EMAIL` constant is no longer directly used in the modern PayPal Orders v2 flow but was kept verbatim as per the rules. A human should decide if this constant can be removed or if it serves any other non-PayPal purpose."
     }
   ],
   "rounds": [
     {
       "round": 1,
       "failures": [
-        "Legacy PayPal code still referenced in: config.php, ipn.php",
-        "api/create-payment.php with the cart the page really sends (quantities are strings and unselected products have \"0\": {tee:\"1\",mug:\"0\",poster:\"0\"}) returned HTTP 200 body: <br />\n<b>Fatal error</b>:  Uncaught Error: Call to a member function getId() on array in E:\\Hackathons\\paypal-ai-hackathon\\samples\\migrated-php-shop-out\\api\\cr. Items with quantity 0 must be skipped (PayPal rejects them), and PayPal/SDK errors must come back as JSON {error} with HTTP 502, never as an HTML error page.",
-        "clicking the PayPal button did not open the PayPal approval window. In JS SDK v6, session.start() must be called synchronously inside the click handler and receive the PROMISE returned by createOrder() (no await before it, not a function reference, not a resolved object).",
-        "browser JavaScript error when loading the page and clicking the PayPal button: TypeError: session.createOrder is not a function"
+        "Legacy PayPal code still referenced in: ipn.php",
+        "with an empty cart the buyer sees nothing after clicking the PayPal button. Show a visible message in #result (for example 'Payment failed: your cart is empty') and do not open PayPal or create an order; catch the rejected promise so no uncaught error is thrown."
       ]
     },
     {
       "round": 2,
-      "failures": [
-        "Legacy PayPal code still referenced in: config.php, ipn.php"
-      ]
-    },
-    {
-      "round": 3,
       "failures": []
     }
   ],

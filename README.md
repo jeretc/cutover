@@ -24,7 +24,7 @@ Cutover day is the scariest day. Thousands of shops still run PayPal code writte
 ## Results (recorded run)
 
 - PayPal touchpoints in the shop: **43 to 0**
-- Security findings: **9 to 1** (the remaining one, order data under the web root, is flagged for a human)
+- Security findings: **9 to 2** (both remaining ones are the same issue, order data kept under the web root, flagged for a human)
 - Scenarios behaving identically on old and new, verified by PayPal: **7 of 7** (single item, multi-item, buyer cancels, refund, refund twice, replayed confirmation, empty cart)
 - Cutover also retired the dead legacy client and flagged the open decisions in `proof/migration-report.json`.
 
@@ -35,6 +35,7 @@ Cutover day is the scariest day. Thousands of shops still run PayPal code writte
 - Sent zero-quantity items that PayPal rejects, and returned HTML errors instead of JSON.
 - Crashed the whole shop when an optional webhook setting was missing.
 - Dropped the cart UI and cancel message (a cheaper fallback model).
+- Read the wrong field in the webhook event (order id at `related_resources` instead of `supplementary_data.related_ids.order_id`). Only a real sandbox webhook after deploy exposed it; the fact is now in the grounding and a static check guards it.
 
 ### A trap only differential testing finds
 

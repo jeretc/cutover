@@ -38,6 +38,7 @@ document.querySelectorAll('input[data-sku]').forEach(function (i) { i.addEventLi
 paypal.Button.render({
   env: 'sandbox',
   commit: true,
+  style: { size: 'responsive', shape: 'rect', color: 'gold', height: 48, tagline: false },
   payment: function () {
     return paypal.request.post('/api/create-payment.php', cart()).then(function (data) { return data.token; });
   },

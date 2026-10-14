@@ -106,13 +106,14 @@ export function discover(root) {
         addSec({ severity: "high", file: f.rel, line: 1, title: "IPN handler accepts a verified message without checking it matches an order", why: `After PayPal says VERIFIED it still does not check: ${missing.join(", ")}. A genuine notification for a different payment could mark an order paid.`, fix: "Check receiver, amount, currency and transaction id against the stored order and ignore duplicates. In the migration: verify the webhook signature and match the event to an order.", evidence: "payment_status handled without order matching" });
     }
     // unauthenticated sensitive endpoints
-    const hasAuth = /session_start|\$_SESSION|PHP_AUTH|Authorization|Bearer|ADMIN_TOKEN|X-Admin-Token|password_verify|is_admin|require_login/i.test(text);
-    if (/RefundTransaction/.test(text) && /php:\/\/input/.test(text) && !hasAuth)
+    const code = text.replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, "$1");
+    const hasAuth = /authenticateAdmin|require_admin|session_start|\$_SESSION|PHP_AUTH|Authorization|Bearer|ADMIN_TOKEN|X-Admin-Token|password_verify|is_admin|require_login/i.test(code);
+    if (/RefundTransaction/.test(code) && /php:\/\/input/.test(code) && !hasAuth)
       addSec({ severity: "critical", file: f.rel, line: 1, title: "Refund endpoint has no authentication", why: "Anyone who can reach this URL and knows (or guesses) an order token can trigger a refund of real money.", fix: "Require an authenticated admin session and CSRF protection; log every refund.", evidence: "RefundTransaction behind an open HTTP endpoint" });
-    if (/orders_all\(\)/.test(text) && /json_encode/.test(text) && /^api\//.test(f.rel) && !hasAuth)
+    if (/orders_all\(\)/.test(code) && /json_encode/.test(code) && /^api\//.test(f.rel) && !hasAuth)
       addSec({ severity: "high", file: f.rel, line: 1, title: "Order listing is public", why: "Returns every order (tokens, amounts, buyer emails, transaction ids) without authentication; the tokens also unlock the refund endpoint.", fix: "Remove it or require admin authentication.", evidence: "orders_all() returned as JSON" });
     // no replay guard in the payment confirmation
-    if (/DoExpressCheckoutPayment/.test(text) && /php:\/\/input/.test(text) && !/['"](PAID|COMPLETED)['"]/.test(text.split("DoExpressCheckoutPayment")[0]))
+    if (/DoExpressCheckoutPayment/.test(code) && /php:\/\/input/.test(code) && !/['"](PAID|COMPLETED)['"]/.test(code.split("DoExpressCheckoutPayment")[0]))
       addSec({ severity: "medium", file: f.rel, line: 1, title: "Payment confirmation has no replay guard", why: "The handler does not check whether the order is already paid before calling PayPal. The classic API hides this because it returns the same transaction, but the modern API will refuse a repeat capture, so behaviour changes.", fix: "Check the stored order status first; make the confirmation idempotent on the server.", evidence: "no status check before DoExpressCheckoutPayment" });
   }
 

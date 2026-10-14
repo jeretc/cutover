@@ -1,5 +1,5 @@
 {
-  "scannedAt": "2026-10-14T10:44:25.611Z",
+  "scannedAt": "2026-10-14T14:22:27.540Z",
   "root": "samples/migrated-php-shop-out",
   "filesScanned": [
     "api/client-token.php",
@@ -19,9 +19,9 @@
   "summary": {
     "touchpoints": 0,
     "byKind": {},
-    "security": 1,
+    "security": 2,
     "bySeverity": {
-      "medium": 1
+      "medium": 2
     },
     "unmapped": 0
   },
@@ -31,11 +31,21 @@
       "id": "S01",
       "severity": "medium",
       "file": "lib/orders_store.php",
-      "line": 4,
+      "line": 3,
       "title": "Order data stored under the web root",
       "why": "Files in the document root can be downloaded directly (for example /data/orders.json).",
       "fix": "Store data outside the web root or in a database.",
       "evidence": "function orders_path() { return __DIR__ . '/../data/orders.json'; }"
+    },
+    {
+      "id": "S02",
+      "severity": "medium",
+      "file": "webhook.php",
+      "line": 124,
+      "title": "Order data stored under the web root",
+      "why": "Files in the document root can be downloaded directly (for example /data/orders.json).",
+      "fix": "Store data outside the web root or in a database.",
+      "evidence": "file_put_contents(__DIR__ . '/data/webhook.log', date('c') . ' ' . $eventType . ' ' . $eventId . \"\\n\", FILE_APPEND);"
     }
   ],
   "unmapped": []

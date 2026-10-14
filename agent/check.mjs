@@ -86,7 +86,7 @@ export async function check(dir, port = 8090, expectText = []) {
       const missing = expectText.filter((t) => !shown.includes(t));
       if (missing.length) fails.push("the page lost visible content the legacy page showed (product names, prices, total). Not found on the page: " + missing.join(" | ") + ". Keep the same visible shop UI: product list with names and prices, quantity inputs, a live total, the result message area.");
       if (!opened) fails.push("clicking the PayPal button did not open the PayPal approval window. In JS SDK v6, session.start() must be called synchronously inside the click handler and receive the PROMISE returned by createOrder() (no await before it, not a function reference, not a resolved object).");
-      if (opened && !process.env.CUTOVER_SKIP_EMPTY_CHECK) {
+      if (opened) {
         const pg2 = await bctx.newPage();
         await pg2.goto(base + "/", { waitUntil: "domcontentloaded" });
         await pg2.waitForTimeout(3000);

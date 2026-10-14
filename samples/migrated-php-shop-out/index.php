@@ -1,7 +1,7 @@
 <?php require_once __DIR__ . '/config.php'; ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cutover Demo Shop (modern PayPal)</title>
+<title>Cutover Demo Shop (legacy PayPal)</title>
 <link rel="stylesheet" href="assets/shop.css">
 </head>
 <body>
@@ -35,74 +35,70 @@ function total() { var t = 0; document.querySelectorAll('input[data-sku]').forEa
 function refresh() { document.getElementById('amt').textContent = total().toFixed(2); }
 document.querySelectorAll('input[data-sku]').forEach(function (i) { i.addEventListener('input', refresh); }); refresh();
 
-// Fix: Define createOrder as a standalone function as per JS SDK v6 grounding.
-// The session.start() method expects a Promise returned by calling this function.
-async function createOrderForSession() {
-  const cartData = cart();
-  if (Object.keys(cartData).length === 0) {
-    throw new Error('Empty cart'); // Prevent creating an empty order
-  }
-  const response = await fetch('/api/create-payment.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(cartData)
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to create order');
-  }
-  const data = await response.json();
-  return { orderId: data.token }; // Server still returns 'token', map to 'orderId' for SDK
-}
-
-async function initPayPalButton() {
+(async () => {
   let clientToken;
   try {
     const response = await fetch('/api/client-token.php');
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to fetch client token');
-    }
+    if (!response.ok) throw new Error('Failed to fetch client token: ' + response.statusText);
     const data = await response.json();
     clientToken = data.clientToken;
   } catch (error) {
     console.error('Error fetching client token:', error);
     document.getElementById('result').style.display = 'block';
-    document.getElementById('result').textContent = 'Payment failed: Could not initialize PayPal (client token error).';
+    document.getElementById('result').textContent = 'Payment failed: Could not initialize PayPal (client token missing).';
     return;
   }
 
   const sdk = await window.paypal.createInstance({ clientToken, components: ['paypal-payments'], pageType: 'checkout' });
   const session = sdk.createPayPalOneTimePaymentSession({
-    // Fix: createOrder callback is no longer defined here. It's handled by session.start's second argument.
     async onApprove(data) {
-      const response = await fetch('/api/execute-payment.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: data.orderId }) // Send orderId, not token/payerID
-      });
-      const res = await response.json();
-      var el = document.getElementById('result'); el.style.display = 'block';
-      el.textContent = res.ok ? 'Payment complete. Transaction ' + res.transactionId + ' for $' + res.amount : 'Payment failed: ' + (res.error || 'unknown');
+      try {
+        const res = await fetch('/api/execute-payment.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: data.orderId })
+        });
+        const jsonRes = await res.json();
+        var el = document.getElementById('result'); el.style.display = 'block';
+        el.textContent = jsonRes.ok ? 'Payment complete. Transaction ' + jsonRes.transactionId + ' for $' + jsonRes.amount : 'Payment failed: ' + (jsonRes.error || 'unknown');
+      } catch (error) {
+        console.error('Error executing payment:', error);
+        var el = document.getElementById('result'); el.style.display = 'block';
+        el.textContent = 'Payment failed: ' + (error.message || 'unknown error during execution.');
+      }
     },
-    onCancel() {
-      var el = document.getElementById('result'); el.style.display = 'block'; el.textContent = 'Payment cancelled.';
-    },
+    onCancel() { var el = document.getElementById('result'); el.style.display = 'block'; el.textContent = 'Payment cancelled.'; },
     onError(err) {
-      console.error('PayPal error:', err);
-      var el = document.getElementById('result'); el.style.display = 'block'; el.textContent = 'Payment failed: ' + (err.message || 'unknown error');
+      console.error('PayPal SDK error:', err);
+      var el = document.getElementById('result'); el.style.display = 'block';
+      el.textContent = 'Payment failed: ' + (err.message || 'unknown PayPal error.');
     }
   });
 
-  const button = document.getElementById('paypal-button');
-  button.addEventListener('click', () => {
-    // createOrder() is an async function that is CALLED here and its promise passed in.
-    // NO await before start(): the popup must open synchronously in the click.
-    // Fix: Call the standalone createOrderForSession function and pass its returned Promise.
-    session.start({ presentationMode: 'popup' }, createOrderForSession());
+  const paypalButton = document.getElementById('paypal-button');
+  paypalButton.addEventListener('click', () => {
+    const cartData = cart();
+    if (Object.keys(cartData).length === 0) {
+        var el = document.getElementById('result'); el.style.display = 'block';
+        el.textContent = 'Payment failed: your cart is empty';
+        return;
+    }
+    session.start({ presentationMode: 'popup' }, createOrder());
   });
-}
 
-initPayPalButton();
+  async function createOrder() {
+    const response = await fetch('/api/create-payment.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cart())
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create order.');
+    }
+    const data = await response.json();
+    return { orderId: data.id };
+  }
+})();
 </script>
 </body></html>

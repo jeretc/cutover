@@ -193,3 +193,4 @@ footer code { background: var(--panel); border: 1px solid var(--hair); padding: 
 .legend, #runfacts { margin: 0 0 16px; line-height: 1.6; }
 .legend span { display: inline-block; margin: 0 18px 4px 0; } .legend b { margin-left: 0; }
 @media (max-width: 760px) { .viewer .notes { max-height: none; } }
+.buyer .hint { font: 400 13px "IBM Plex Sans", sans-serif; color: var(--muted); word-break: normal; }

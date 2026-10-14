@@ -7,37 +7,61 @@ use PaypalServerSdkLib\Authentication\ClientCredentialsAuthCredentialsBuilder;
 use PaypalServerSdkLib\Environment;
 use PaypalServerSdkLib\ApiException;
 
-function getPaypalClient() {
-    $clientId = getenv('PAYPAL_CLIENT_ID');
-    $clientSecret = getenv('PAYPAL_CLIENT_SECRET');
+$clientId = PAYPAL_CLIENT_ID;
+$clientSecret = PAYPAL_CLIENT_SECRET;
 
-    if (!$clientId || !$clientSecret) {
-        error_log("PayPal client ID or secret not set in environment.");
-        // This function is called by API endpoints, so it should throw an exception
-        // that can be caught and translated to an HTTP 500/502.
-        throw new Exception("PayPal credentials missing.");
+$client = null;
+$orders = null;
+$payments = null;
+
+if ($clientId && $clientSecret) {
+    try {
+        $client = PaypalServerSdkClientBuilder::init()
+            ->clientCredentialsAuthCredentials(ClientCredentialsAuthCredentialsBuilder::init($clientId, $clientSecret))
+            ->environment(Environment::SANDBOX)->build();
+        $orders = $client->getOrdersController();
+        $payments = $client->getPaymentsController();
+    } catch (Exception $e) {
+        error_log("PayPal SDK client initialization failed: " . $e->getMessage());
+        // Client will remain null, calling scripts must check for it.
+    }
+} else {
+    error_log("PayPal API credentials (PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET) are missing.");
+}
+
+// Helper function for API calls to handle exceptions consistently
+function handlePayPalApiException($e) {
+    if ($e instanceof ApiException) {
+        $statusCode = $e->getStatusCode();
+        $responseBody = $e->getResponseBody();
+        error_log("PayPal API Error (Status: $statusCode): $responseBody");
+        $errorData = json_decode($responseBody, true);
+        $errorMessage = $errorData['message'] ?? ($errorData['details'][0]['description'] ?? 'PayPal API error');
+        http_response_code(502);
+        echo json_encode(['error' => $errorMessage]);
+    } else {
+        error_log("Unexpected error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'An unexpected error occurred.']);
+    }
+    exit;
+}
+
+// Helper function for admin authentication
+function authenticateAdmin() {
+    $adminToken = ADMIN_TOKEN;
+    $requestToken = $_SERVER['HTTP_X_ADMIN_TOKEN'] ?? '';
+
+    if (!$adminToken) {
+        error_log("ADMIN_TOKEN environment variable is not set.");
+        http_response_code(500);
+        echo json_encode(['error' => 'Admin token not configured on server.']);
+        exit;
     }
 
-    return PaypalServerSdkClientBuilder::init()
-        ->clientCredentialsAuthCredentials(ClientCredentialsAuthCredentialsBuilder::init($clientId, $clientSecret))
-        ->environment(Environment::SANDBOX)->build();
-}
-
-function getPaypalOrdersController() {
-    return getPaypalClient()->getOrdersController();
-}
-
-function getPaypalPaymentsController() {
-    return getPaypalClient()->getPaymentsController();
-}
-
-// Helper for consistent error responses
-function handlePaypalApiException(ApiException $e, $defaultMessage = 'PayPal API error') {
-    $statusCode = $e->getStatusCode();
-    $errorBody = json_decode($e->getResponse(), true);
-    $errorMessage = $errorBody['details'][0]['description'] ?? $errorBody['message'] ?? $defaultMessage;
-    error_log("PayPal API Error (Status: $statusCode): " . $errorMessage);
-    http_response_code(502); // Use 502 for upstream API errors
-    echo json_encode(['error' => $errorMessage]);
-    exit;
+    if ($requestToken !== $adminToken) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized.']);
+        exit;
+    }
 }

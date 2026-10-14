@@ -1,47 +1,40 @@
 <?php
+// Steps 2 and 3: GetExpressCheckoutDetails then DoExpressCheckoutPayment, called after the buyer approves.
+// MIGRATED: Now captures the PayPal Order using Orders v2 API.
 require_once __DIR__ . '/../lib/paypal_sdk.php';
 require_once __DIR__ . '/../lib/orders_store.php';
 header('Content-Type: application/json');
 
 use PaypalServerSdkLib\ApiException;
 
+if (!$orders) {
+    http_response_code(500);
+    echo json_encode(['error' => 'PayPal SDK not initialized.']);
+    exit;
+}
+
 $in = json_decode(file_get_contents('php://input'), true) ?: $_POST;
-$orderId = $in['orderId'] ?? ''; // Frontend now sends orderId, not token
+$orderId = $in['orderId'] ?? ''; // JS SDK v6 sends orderId
 
 $order = orders_get($orderId);
 if (!$order) { http_response_code(404); echo json_encode(['error' => 'unknown order ID']); exit; }
 
-// Security fix: Payment confirmation has replay guard.
-// If the order is already paid, return the existing transaction details idempotently.
+// Security fix: Payment confirmation has replay guard (idempotency).
+// If the order is already paid, return the stored transaction ID.
 if ($order['status'] === 'PAID') {
     echo json_encode(['ok' => true, 'transactionId' => $order['transaction_id'], 'amount' => $order['amount']]);
     exit;
 }
-// If the order is already refunded, it's an error to try to capture again.
-if ($order['status'] === 'REFUNDED') {
-    http_response_code(400);
-    echo json_encode(['error' => 'Order already refunded, cannot capture.']);
-    exit;
-}
-
-$ordersController = getPaypalOrdersController();
 
 try {
-    // Get order details (replaces GetExpressCheckoutDetails)
-    $paypalOrder = $ordersController->getOrder(['id' => $orderId])->getResult();
-    if ($paypalOrder->getStatus() !== 'APPROVED') {
-        http_response_code(400);
-        echo json_encode(['error' => 'Order not approved by buyer. Current status: ' . $paypalOrder->getStatus()]);
-        exit;
-    }
+    // Get order details to retrieve payer email (replaces GetExpressCheckoutDetails)
+    $paypalOrder = $orders->getOrder(['id' => $orderId]);
+    $payerEmail = $paypalOrder->getResult()->getPayer()->getEmailAddress() ?? '';
+    $payerId = $paypalOrder->getResult()->getPayer()->getPayerId() ?? '';
 
     // Capture the order (replaces DoExpressCheckoutPayment)
-    $captureResponse = $ordersController->captureOrder(['id' => $orderId, 'prefer' => 'return=representation']);
-    $captureResult = $captureResponse->getResult();
-
-    $captureId = $captureResult->getPurchaseUnits()[0]->getPayments()->getCaptures()[0]->getId();
-    $payerEmail = $paypalOrder->getPayer()->getEmailAddress() ?? '';
-    $payerId = $paypalOrder->getPayer()->getPayerId() ?? ''; // Store payer ID if available
+    $captureResponse = $orders->captureOrder(['id' => $orderId, 'prefer' => 'return=representation']);
+    $captureId = $captureResponse->getResult()->getPurchaseUnits()[0]->getPayments()->getCaptures()[0]->getId();
 
     $order['status'] = 'PAID';
     $order['payer_id'] = $payerId;
@@ -52,17 +45,31 @@ try {
     echo json_encode(['ok' => true, 'transactionId' => $order['transaction_id'], 'amount' => $order['amount']]);
 
 } catch (ApiException $e) {
-    // Handle specific PayPal errors like ORDER_ALREADY_CAPTURED if the replay guard above somehow missed it
-    $errorBody = json_decode($e->getResponse(), true);
-    if (($errorBody['name'] ?? '') === 'ORDER_ALREADY_CAPTURED') {
-        error_log("Attempted to capture an already captured order: " . $orderId . ". This should have been caught by the replay guard.");
-        http_response_code(400);
-        echo json_encode(['error' => 'Order already captured.']);
-        exit;
+    // Handle ORDER_ALREADY_CAPTURED specifically for idempotency
+    if ($e->getStatusCode() === 422) {
+        $errorData = json_decode($e->getResponseBody(), true);
+        if (($errorData['details'][0]['issue'] ?? '') === 'ORDER_ALREADY_CAPTURED') {
+            // Attempt to retrieve the capture ID from the order if it was already captured by PayPal
+            try {
+                $paypalOrder = $orders->getOrder(['id' => $orderId]);
+                $captures = $paypalOrder->getResult()->getPurchaseUnits()[0]->getPayments()->getCaptures();
+                if (!empty($captures)) {
+                    $captureId = $captures[0]->getId();
+                    $order['status'] = 'PAID';
+                    $order['transaction_id'] = $captureId;
+                    orders_save($order);
+                    echo json_encode(['ok' => true, 'transactionId' => $order['transaction_id'], 'amount' => $order['amount']]);
+                    exit;
+                }
+            } catch (Exception $innerE) {
+                error_log("Failed to retrieve capture details for already captured order $orderId: " . $innerE->getMessage());
+            }
+        }
     }
-    handlePaypalApiException($e, 'Failed to execute PayPal payment');
+    handlePayPalApiException($e);
 } catch (Exception $e) {
-    error_log("General error in execute-payment: " . $e->getMessage());
+    error_log("Unexpected error in execute-payment: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'Internal server error']);
+    echo json_encode(['error' => 'An unexpected error occurred.']);
+    exit;
 }

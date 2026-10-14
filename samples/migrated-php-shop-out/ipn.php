@@ -1,2 +1,4 @@
 <?php
-// This file is obsolete and has been replaced by webhook.php.
+// MIGRATED: IPN is deprecated. Use webhook.php instead.
+http_response_code(404);
+exit;
