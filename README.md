@@ -8,6 +8,8 @@ Cutover is an AI migration agent. It reads an old PayPal integration (classic NV
 
 **Live demo:** https://cutover.onrender.com (free tier: the first load after idle can take about 50 seconds) &nbsp;|&nbsp; **Demo video:** https://youtu.be/dCNbdxsOZZs
 
+![Cutover: migrate legacy PayPal code, and prove it still pays](docs/images/cutover-banner.png)
+
 ## Why
 
 Cutover day is the scariest day. Thousands of shops still run PayPal code written years ago, and PayPal keeps moving to newer APIs. Switching means finding every touchpoint, rewriting it, and then trusting that checkout still works, because a broken checkout means zero sales. AI can do the rewriting, but nobody should have to trust it. So Cutover does not ask for trust. It produces evidence.
@@ -44,6 +46,35 @@ The classic API is idempotent: replaying a payment confirmation returns the same
 ## Try it
 
 The demo site runs the report **and both shops live**: an old shop (`/legacy/`) and the migrated shop (`/shop/`), each with a working sandbox PayPal button. Pay with the sandbox buyer shown on the page and watch the payments appear in the live feed.
+
+## Screenshots
+
+**Both shops, same store, two generations of code.** Left: the old shop (checkout.js v4 + classic NVP API). Right: the migrated shop (JS SDK v6 + Orders v2 + PHP Server SDK).
+
+<p>
+  <img src="docs/images/old-shop.jpg" alt="The old shop with the classic PayPal Checkout button" width="49%">
+  <img src="docs/images/migrated-shop.jpg" alt="The migrated shop with the new Pay with PayPal button" width="49%">
+</p>
+
+**Live proof.** After one payment in each shop, the page asks PayPal what happened to each and compares the two. The code path shows which generation of code made each payment.
+
+![Verdict card and live payments feed: same outcome, different code](docs/images/live-verdict-and-feed.jpg)
+
+**Discover.** Every PayPal touchpoint found by a plain code scan, with how sure each mapping is.
+
+![Findings table](docs/images/discover-findings.jpg)
+
+**Rewrite.** A diff a person approves. Nothing is applied automatically.
+
+![Diff viewer and what was left for a human](docs/images/rewrite-diff.jpg)
+
+**Check and repair.** The mistakes the AI made, and the check that caught each one.
+
+![Mistakes the AI made and the checks that caught them](docs/images/mistakes-caught.jpg)
+
+**Prove.** The same seven scenarios on the old and the migrated shop, verified by PayPal.
+
+![Seven scenarios, old shop versus migrated shop](docs/images/proof-7-of-7.jpg)
 
 ## Run it yourself
 
@@ -85,6 +116,7 @@ scripts/    scenarios.mjs (browser proof), diff-proof.mjs, run-legacy-shop.mjs, 
 server/     server.mjs (one process: demo site + both shops + live feed)
 web/        the demo site (AG Grid findings table, diff viewer, proof table)
 proof/      recorded evidence: discovery, golden record, migrated run, migration report, AI runs
+docs/       screenshots used in this README
 ```
 
 ## Built with
