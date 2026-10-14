@@ -6,7 +6,7 @@ Cutover is an AI migration agent. It reads an old PayPal integration (classic NV
 
 > Built for the PayPal AI Hackathon. Sandbox only: fake buyer, fake money. This project is not affiliated with or endorsed by PayPal.
 
-**Live demo:** https://cutover.onrender.com (free tier: the first load after idle can take about 50 seconds) &nbsp;|&nbsp; **Demo video:** _link added after upload_
+**Live demo:** https://cutover.onrender.com (free tier: the first load after idle can take about 50 seconds) &nbsp;|&nbsp; **Demo video:** https://youtu.be/dCNbdxsOZZs
 
 ## Why
 
