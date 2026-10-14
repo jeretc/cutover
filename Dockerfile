@@ -1,6 +1,6 @@
 # Cutover live demo: report site + old shop + migrated shop in one container (Node serves, PHP runs the shops).
 FROM node:20-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends php-cli php-curl php-mbstring unzip ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends php-cli php-curl php-mbstring php-xml unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /app
