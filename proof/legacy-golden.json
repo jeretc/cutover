@@ -1,0 +1,73 @@
+{
+  "label": "legacy-golden",
+  "shop": "http://localhost:8081",
+  "at": "2026-10-14T05:52:58.721Z",
+  "scenarios": {
+    "S1-single-item": {
+      "title": "Buy one tee",
+      "pass": true,
+      "summary": "shop: paid 25.00; PayPal: Completed 25.00 USD",
+      "outcome": {
+        "shop": "paid",
+        "amount": "25.00",
+        "paypalStatus": "Completed",
+        "paypalAmount": "25.00",
+        "currency": "USD"
+      }
+    },
+    "S2-multi-item": {
+      "title": "Buy 1 tee + 2 mugs (25.00 + 2 x 12.50)",
+      "pass": true,
+      "summary": "shop: paid 50.00; PayPal: Completed 50.00 USD",
+      "outcome": {
+        "shop": "paid",
+        "amount": "50.00",
+        "paypalStatus": "Completed",
+        "paypalAmount": "50.00",
+        "currency": "USD"
+      }
+    },
+    "S3-buyer-cancels": {
+      "title": "Buyer cancels at PayPal",
+      "pass": true,
+      "summary": "shop shows: Payment cancelled.",
+      "outcome": {
+        "shop": "cancelled"
+      }
+    },
+    "S4-refund": {
+      "title": "Refund the second order in full",
+      "pass": true,
+      "summary": "refund HTTP 200; PayPal now says Refunded",
+      "outcome": {
+        "refundHttp": 200,
+        "paypalStatus": "Refunded"
+      }
+    },
+    "S5-refund-twice": {
+      "title": "Refunding an already refunded order is refused",
+      "pass": true,
+      "summary": "second refund HTTP 400 (order is not paid)",
+      "outcome": {
+        "refundHttp": 400
+      }
+    },
+    "S6-double-execute": {
+      "title": "Replaying the payment confirmation for a paid order does not charge twice",
+      "pass": true,
+      "summary": "replay HTTP 200: returned the SAME transaction (no second charge)",
+      "outcome": {
+        "noSecondCharge": true,
+        "behaviour": "returns-same-transaction"
+      }
+    },
+    "S7-empty-cart": {
+      "title": "Creating a payment with an empty cart is rejected",
+      "pass": true,
+      "summary": "HTTP 400 (empty cart)",
+      "outcome": {
+        "http": 400
+      }
+    }
+  }
+}

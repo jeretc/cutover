@@ -1,0 +1,41 @@
+{
+  "scannedAt": "2026-10-14T07:14:21.701Z",
+  "root": "samples/migrated-php-shop-out",
+  "filesScanned": [
+    "api/client-token.php",
+    "api/create-payment.php",
+    "api/execute-payment.php",
+    "api/orders.php",
+    "api/refund.php",
+    "cancel.php",
+    "config.php",
+    "index.php",
+    "ipn.php",
+    "lib/orders_store.php",
+    "lib/paypal_sdk.php",
+    "success.php"
+  ],
+  "summary": {
+    "touchpoints": 0,
+    "byKind": {},
+    "security": 1,
+    "bySeverity": {
+      "medium": 1
+    },
+    "unmapped": 0
+  },
+  "touchpoints": [],
+  "security": [
+    {
+      "id": "S01",
+      "severity": "medium",
+      "file": "lib/orders_store.php",
+      "line": 3,
+      "title": "Order data stored under the web root",
+      "why": "Files in the document root can be downloaded directly (for example /data/orders.json).",
+      "fix": "Store data outside the web root or in a database.",
+      "evidence": "function orders_path() { return __DIR__ . '/../data/orders.json'; }"
+    }
+  ],
+  "unmapped": []
+}

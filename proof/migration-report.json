@@ -1,0 +1,118 @@
+{
+  "at": "2026-10-14T07:13:58.106Z",
+  "source": "samples/legacy-php-shop",
+  "out": "samples/migrated-php-shop-out",
+  "calls": [
+    {
+      "model": "gemini-3.1-flash-lite",
+      "cached": true
+    },
+    {
+      "model": "gemini-3.1-flash-lite",
+      "cached": true,
+      "repair": 1
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "api/create-payment.php",
+      "changes": [
+        "Migrated to Orders v2 SDK",
+        "Changed response key from token to id",
+        "Skip items with quantity 0",
+        "Wrap SDK call in try-catch to return 502 JSON on failure"
+      ]
+    },
+    {
+      "path": "api/execute-payment.php",
+      "changes": [
+        "Migrated to Orders v2 SDK",
+        "Added idempotency check for already captured orders"
+      ]
+    },
+    {
+      "path": "api/orders.php",
+      "changes": [
+        "Added ADMIN_TOKEN authentication"
+      ]
+    },
+    {
+      "path": "api/refund.php",
+      "changes": [
+        "Migrated to Payments SDK",
+        "Added ADMIN_TOKEN authentication"
+      ]
+    },
+    {
+      "path": "config.php",
+      "changes": [
+        "Removed NVP constants",
+        "Added environment-based credential loading"
+      ]
+    },
+    {
+      "path": "index.php",
+      "changes": [
+        "Migrated to JS SDK v6",
+        "Implemented createOrder promise flow",
+        "Added missing cart inputs",
+        "Updated createOrder to read inputs",
+        "Fixed session.start call to pass promise directly"
+      ]
+    },
+    {
+      "path": "ipn.php",
+      "changes": [
+        "Replaced IPN with Webhook verification"
+      ]
+    }
+  ],
+  "filesAdded": [
+    {
+      "path": "api/client-token.php",
+      "changes": [
+        "New endpoint to mint client token for JS SDK v6"
+      ]
+    },
+    {
+      "path": "lib/paypal_sdk.php",
+      "changes": [
+        "Initialized PayPal Server SDK"
+      ]
+    }
+  ],
+  "flags": [
+    {
+      "flag": "Verify that the environment variables PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, and PAYPAL_WEBHOOK_ID are set in the production/staging environment."
+    },
+    {
+      "flag": "Ensure the vendor/autoload.php is present via composer install."
+    },
+    {
+      "flag": "The webhook handler logic for matching events to orders needs to be completed based on the specific database schema."
+    },
+    {
+      "flag": "Ensure the server environment has PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, and PAYPAL_WEBHOOK_ID set."
+    }
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "failures": [
+        "index.php: cart quantity inputs (input[data-sku]) missing from the page",
+        "api/create-payment.php with the cart the page really sends (quantities are strings and unselected products have \"0\": {tee:\"1\",mug:\"0\",poster:\"0\"}) returned HTTP 200 body: <br />\n<b>Fatal error</b>:  Uncaught Error: Call to a member function getId() on array in E:\\Hackathons\\paypal-ai-hackathon\\samples\\migrated-php-shop-out\\api\\cr. Items with quantity 0 must be skipped (PayPal rejects them), and PayPal/SDK errors must come back as JSON {error} with HTTP 502, never as an HTML error page.",
+        "clicking the PayPal button did not open the PayPal approval window. In JS SDK v6, session.start() must be called synchronously inside the click handler and receive the PROMISE returned by createOrder() (no await before it, not a function reference, not a resolved object)."
+      ]
+    },
+    {
+      "round": 2,
+      "failures": []
+    }
+  ],
+  "filesRemoved": [
+    {
+      "path": "lib/paypal_nvp.php",
+      "reason": "legacy NVP client, no longer referenced by any file"
+    }
+  ]
+}

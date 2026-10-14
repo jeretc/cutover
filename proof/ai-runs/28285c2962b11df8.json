@@ -1,0 +1,81 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "at": "2026-10-14T06:55:56.513Z",
+  "json": {
+    "files": [
+      {
+        "path": "api/client-token.php",
+        "content": "<?php\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nheader('Content-Type: application/json');\n$ch = curl_init('https://api-m.sandbox.paypal.com/v1/oauth2/token');\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\ncurl_setopt($ch, CURLOPT_USERPWD, getenv('PAYPAL_CLIENT_ID') . ':' . getenv('PAYPAL_CLIENT_SECRET'));\ncurl_setopt($ch, CURLOPT_POSTFIELDS, 'grant_type=client_credentials&response_type=client_token&intent=sdk_init');\n$res = json_decode(curl_exec($ch), true);\ncurl_close($ch);\necho json_encode(['clientToken' => $res['access_token']]);",
+        "changes": [
+          "New endpoint to mint client token for JS SDK v6"
+        ]
+      },
+      {
+        "path": "api/create-payment.php",
+        "content": "<?php\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nrequire_once __DIR__ . '/../lib/orders_store.php';\nheader('Content-Type: application/json');\n$cart = json_decode(file_get_contents('php://input'), true) ?: $_POST;\n$total = 0.0; $items = [];\nforeach ($cart as $sku => $qty) {\n    if (!isset($PRODUCTS[$sku])) continue;\n    $p = $PRODUCTS[$sku];\n    $items[] = \\PaypalServerSdkLib\\Models\\Builders\\ItemBuilder::init($p['name'], \\PaypalServerSdkLib\\Models\\Builders\\MoneyBuilder::init(SHOP_CURRENCY, $p['price'])->build(), (string)$qty)->build();\n    $total += $p['price'] * (int)$qty;\n}\nif ($total <= 0) { http_response_code(400); echo json_encode(['error' => 'empty cart']); exit; }\n$r = $orders->createOrder(['body' => \\PaypalServerSdkLib\\Models\\Builders\\OrderRequestBuilder::init('CAPTURE', [\n    \\PaypalServerSdkLib\\Models\\Builders\\PurchaseUnitRequestBuilder::init(\n        \\PaypalServerSdkLib\\Models\\Builders\\AmountWithBreakdownBuilder::init(SHOP_CURRENCY, number_format($total, 2, '.', ''))\n            ->breakdown(\\PaypalServerSdkLib\\Models\\Builders\\AmountBreakdownBuilder::init()->itemTotal(\\PaypalServerSdkLib\\Models\\Builders\\MoneyBuilder::init(SHOP_CURRENCY, number_format($total, 2, '.', ''))->build())->build())->build()\n    )->items($items)->build()\n])->build(), 'prefer' => 'return=representation']);\n$orderId = $r->getResult()->getId();\norders_save(['token' => $orderId, 'amount' => number_format($total, 2, '.', ''), 'status' => 'CREATED', 'created' => date('c')]);\necho json_encode(['id' => $orderId]);",
+        "changes": [
+          "Migrated to Orders v2 SDK",
+          "Changed response key from token to id"
+        ]
+      },
+      {
+        "path": "api/execute-payment.php",
+        "content": "<?php\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nrequire_once __DIR__ . '/../lib/orders_store.php';\nheader('Content-Type: application/json');\n$in = json_decode(file_get_contents('php://input'), true);\n$orderId = $in['orderId'] ?? '';\n$order = orders_get($orderId);\nif (!$order) { http_response_code(404); echo json_encode(['error' => 'unknown order']); exit; }\nif ($order['status'] === 'PAID') { echo json_encode(['ok' => true, 'transactionId' => $order['transaction_id'], 'amount' => $order['amount']]); exit; }\ntry {\n    $res = $orders->captureOrder(['id' => $orderId, 'prefer' => 'return=representation']);\n    $capture = $res->getResult()->getPurchaseUnits()[0]->getPayments()->getCaptures()[0];\n    $order['status'] = 'PAID';\n    $order['transaction_id'] = $capture->getId();\n    orders_save($order);\n    echo json_encode(['ok' => true, 'transactionId' => $order['transaction_id'], 'amount' => $order['amount']]);\n} catch (Exception $e) { http_response_code(502); echo json_encode(['error' => 'capture failed']); }",
+        "changes": [
+          "Migrated to Orders v2 SDK",
+          "Added idempotency check for already captured orders"
+        ]
+      },
+      {
+        "path": "api/orders.php",
+        "content": "<?php\nrequire_once __DIR__ . '/../lib/orders_store.php';\nif (getenv('ADMIN_TOKEN') === false || ($_SERVER['HTTP_X_ADMIN_TOKEN'] ?? '') !== getenv('ADMIN_TOKEN')) { http_response_code(401); exit; }\nheader('Content-Type: application/json');\necho json_encode(array_values(orders_all()));",
+        "changes": [
+          "Added ADMIN_TOKEN authentication"
+        ]
+      },
+      {
+        "path": "api/refund.php",
+        "content": "<?php\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nrequire_once __DIR__ . '/../lib/orders_store.php';\nif (getenv('ADMIN_TOKEN') === false || ($_SERVER['HTTP_X_ADMIN_TOKEN'] ?? '') !== getenv('ADMIN_TOKEN')) { http_response_code(401); exit; }\nheader('Content-Type: application/json');\n$in = json_decode(file_get_contents('php://input'), true) ?: [];\n$order = orders_get($in['token'] ?? '');\nif (!$order || $order['status'] !== 'PAID') { http_response_code(400); echo json_encode(['error' => 'order is not paid']); exit; }\ntry {\n    $resp = $payments->refundCapturedPayment(['captureId' => $order['transaction_id'], 'prefer' => 'return=representation']);\n    $order['status'] = 'REFUNDED'; $order['refund_id'] = $resp->getResult()->getId();\n    orders_save($order);\n    echo json_encode(['ok' => true, 'refundId' => $order['refund_id']]);\n} catch (Exception $e) { http_response_code(502); echo json_encode(['error' => 'refund failed']); }",
+        "changes": [
+          "Migrated to Payments SDK",
+          "Added ADMIN_TOKEN authentication"
+        ]
+      },
+      {
+        "path": "config.php",
+        "content": "<?php\n$clientId = getenv('PAYPAL_CLIENT_ID');\n$clientSecret = getenv('PAYPAL_CLIENT_SECRET');\nif (!$clientId || !$clientSecret) { /* Fail loudly if needed */ }\ndefine('SHOP_CURRENCY', 'USD');\ndefine('SHOP_BASE_URL', getenv('SHOP_BASE_URL') ?: 'http://localhost:8081');\n$PRODUCTS = ['tee' => ['name' => 'Cutover Tee', 'price' => '25.00'], 'mug' => ['name' => 'Rollback Mug', 'price' => '12.50'], 'poster' => ['name' => 'Legacy Poster', 'price' => '18.00']];",
+        "changes": [
+          "Removed NVP constants",
+          "Added environment-based credential loading"
+        ]
+      },
+      {
+        "path": "index.php",
+        "content": "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>Cutover Demo Shop</title>\n<script src=\"https://www.paypal.com/web-sdk/v6/core\"></script>\n</head><body>\n<div id=\"paypal-button\"></div>\n<div id=\"result\"></div>\n<script>\nasync function createOrder() {\n  const res = await fetch('/api/create-payment.php', { method: 'POST', body: JSON.stringify({tee: 1}) });\n  const data = await res.json();\n  return { orderId: data.id };\n}\n(async () => {\n  const tokenRes = await fetch('/api/client-token.php');\n  const { clientToken } = await tokenRes.json();\n  const sdk = await window.paypal.createInstance({ clientToken, components: ['paypal-payments'], pageType: 'checkout' });\n  const session = sdk.createPayPalOneTimePaymentSession({\n    async onApprove(data) {\n      const res = await fetch('/api/execute-payment.php', { method: 'POST', body: JSON.stringify({ orderId: data.orderId }) });\n      const json = await res.json();\n      document.getElementById('result').style.display = 'block';\n      document.getElementById('result').textContent = json.ok ? `Payment complete. Transaction ${json.transactionId} for $${json.amount}` : `Payment failed: ${json.error}`;\n    },\n    onCancel() { document.getElementById('result').style.display = 'block'; document.getElementById('result').textContent = 'Payment cancelled.'; },\n    onError(err) { document.getElementById('result').style.display = 'block'; document.getElementById('result').textContent = 'Payment failed: ' + err; }\n  });\n  document.getElementById('paypal-button').addEventListener('click', () => session.start({ presentationMode: 'popup' }, createOrder()));\n})();\n</script></body></html>",
+        "changes": [
+          "Migrated to JS SDK v6",
+          "Implemented createOrder promise flow"
+        ]
+      },
+      {
+        "path": "ipn.php",
+        "content": "<?php\nrequire_once __DIR__ . '/lib/paypal_sdk.php';\nrequire_once __DIR__ . '/lib/orders_store.php';\nfunction verifyWebhook($raw, $headers) {\n    $token = base64_encode(getenv('PAYPAL_CLIENT_ID') . ':' . getenv('PAYPAL_CLIENT_SECRET'));\n    $ch = curl_init('https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature');\n    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\n    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Basic ' . $token, 'Content-Type: application/json']);\n    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['auth_algo' => $headers['HTTP_PAYPAL_AUTH_ALGO'], 'cert_url' => $headers['HTTP_PAYPAL_CERT_URL'], 'transmission_id' => $headers['HTTP_PAYPAL_TRANSMISSION_ID'], 'transmission_sig' => $headers['HTTP_PAYPAL_TRANSMISSION_SIG'], 'transmission_time' => $headers['HTTP_PAYPAL_TRANSMISSION_TIME'], 'webhook_id' => getenv('PAYPAL_WEBHOOK_ID'), 'webhook_event' => json_decode($raw)]));\n    $res = json_decode(curl_exec($ch), true);\n    return ($res['verification_status'] ?? '') === 'SUCCESS';\n}\n$raw = file_get_contents('php://input');\nif (verifyWebhook($raw, $_SERVER)) {\n    $event = json_decode($raw, true);\n    if ($event['event_type'] === 'PAYMENT.CAPTURE.COMPLETED') {\n        // Logic to update order status if not already paid\n    }\n}\nhttp_response_code(200);",
+        "changes": [
+          "Replaced IPN with Webhook verification"
+        ]
+      },
+      {
+        "path": "lib/paypal_sdk.php",
+        "content": "<?php\nrequire_once __DIR__ . '/../vendor/autoload.php';\nrequire_once __DIR__ . '/../config.php';\nuse PaypalServerSdkLib\\PaypalServerSdkClientBuilder;\nuse PaypalServerSdkLib\\Authentication\\ClientCredentialsAuthCredentialsBuilder;\nuse PaypalServerSdkLib\\Environment;\n$client = PaypalServerSdkClientBuilder::init()\n  ->clientCredentialsAuthCredentials(ClientCredentialsAuthCredentialsBuilder::init(getenv('PAYPAL_CLIENT_ID'), getenv('PAYPAL_CLIENT_SECRET')))\n  ->environment(Environment::SANDBOX)->build();\n$orders = $client->getOrdersController();\n$payments = $client->getPaymentsController();",
+        "changes": [
+          "Initialized PayPal Server SDK"
+        ]
+      }
+    ],
+    "flags": [
+      "Verify that the environment variables PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, and PAYPAL_WEBHOOK_ID are set in the production/staging environment.",
+      "Ensure the vendor/autoload.php is present via composer install.",
+      "The webhook handler logic for matching events to orders needs to be completed based on the specific database schema."
+    ]
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "model": "gemini-2.5-flash",
+  "at": "2026-10-14T06:44:40.080Z",
+  "json": {
+    "files": [
+      {
+        "path": "api/create-payment.php",
+        "content": "<?php\n// Step 1 of Express Checkout: SetExpressCheckout, returns the EC token to checkout.js.\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nrequire_once __DIR__ . '/../lib/orders_store.php';\nuse PaypalServerSdkLib\\Models\\Builders\\{OrderRequestBuilder, PurchaseUnitRequestBuilder, AmountWithBreakdownBuilder, AmountBreakdownBuilder, ItemBuilder, MoneyBuilder, ExperienceContextBuilder, PaymentSourceBuilder, PayPalPaymentSourceBuilder};\nuse PaypalServerSdkLib\\ApiException;\n\nheader('Content-Type: application/json');\n\n// checkout.js v4 posts either JSON or a classic form body depending on the call; accept both.\n$cart = json_decode(file_get_contents('php://input'), true) ?: $_POST;\n$total = 0.0; $items_paypal = [];\nforeach ($cart as $sku => $qty) {\n    if (!isset($PRODUCTS[$sku])) continue;\n    $p = $PRODUCTS[$sku];\n    $items_paypal[] = ItemBuilder::init($p['name'], MoneyBuilder::init(SHOP_CURRENCY, number_format($p['price'], 2, '.', ''))->build(), (string)$qty)->build();\n    $total += $p['price'] * (int)$qty;\n}\nif ($total <= 0) { http_response_code(400); echo json_encode(['error' => 'empty cart']); exit; }\n\n$orders = getPaypalClient()->getOrdersController();\n\ntry {\n    $purchaseUnit = PurchaseUnitRequestBuilder::init(\n        AmountWithBreakdownBuilder::init(SHOP_CURRENCY, number_format($total, 2, '.', ''))\n            ->breakdown(AmountBreakdownBuilder::init()->itemTotal(MoneyBuilder::init(SHOP_CURRENCY, number_format($total, 2, '.', ''))->build())->build())\n            ->build()\n    )->items($items_paypal)->build();\n\n    $orderRequest = OrderRequestBuilder::init('CAPTURE', [$purchaseUnit])\n        ->paymentSource(\n            PayPalPaymentSourceBuilder::init()\n                ->experienceContext(\n                    ExperienceContextBuilder::init()\n                        ->returnUrl(SHOP_BASE_URL . '/success.php')\n                        ->cancelUrl(SHOP_BASE_URL . '/cancel.php')\n                        ->shippingPreference('NO_SHIPPING')\n                        ->locale('en_US')\n                        ->build()\n                )\n                ->build()\n        )\n        ->build();\n\n    $r = $orders->createOrder(['body' => $orderRequest, 'prefer' => 'return=representation']);\n    $orderId = $r->getResult()->getId();\n\n    orders_save(['token' => $orderId, 'amount' => number_format($total, 2, '.', ''), 'status' => 'CREATED', 'created' => date('c')]);\n    echo json_encode(['token' => $orderId]);\n} catch (ApiException $e) {\n    http_response_code(502);\n    $error_message = 'PayPal error';\n    if ($e->getResponse() && $e->getResponse()->getBody()) {\n        $error_data = json_decode($e->getResponse()->getBody(), true);\n        $error_message = $error_data['details'][0]['description'] ?? $error_data['message'] ?? $error_message;\n    }\n    echo json_encode(['error' => $error_message]);\n    exit;\n}\n",
+        "changes": [
+          "Replaced `paypal_nvp` with `PaypalServerSdkLib` classes and `getPaypalClient()`.",
+          "Constructed `OrderRequestBuilder` with `CAPTURE` intent and `PurchaseUnitRequestBuilder` for cart items and total.",
+          "Mapped `RETURNURL`, `CANCELURL`, `NOSHIPPING`, `LOCALECODE` to `ExperienceContextBuilder`.",
+          "Called `$orders->createOrder()` to create the PayPal order.",
+          "Stored the PayPal `orderId` (formerly `token`) in `orders_save()`.",
+          "Returned `token` (now `orderId`) to maintain front-end compatibility.",
+          "Added `ApiException` handling for PayPal API errors."
+        ]
+      },
+      {
+        "path": "api/execute-payment.php",
+        "content": "<?php\n// Steps 2 and 3: GetExpressCheckoutDetails then DoExpressCheckoutPayment, called after the buyer approves.\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nrequire_once __DIR__ . '/../lib/orders_store.php';\nuse PaypalServerSdkLib\\ApiException;\n\nheader('Content-Type: application/json');\n\n$in = json_decode(file_get_contents('php://input'), true) ?: $_POST;\n$orderId = $in['token'] ?? '';\n$order = orders_get($orderId);\n\nif (!$order) { http_response_code(404); echo json_encode(['error' => 'unknown token']); exit; }\n\n// Security fix: Payment confirmation has a replay guard. If already paid, return existing transaction.\nif ($order['status'] === 'PAID') {\n    echo json_encode(['ok' => true, 'transactionId' => $order['transaction_id'], 'amount' => $order['amount']]);\n    exit;\n}\n\n$orders = getPaypalClient()->getOrdersController();\n\ntry {\n    // Get order details (replaces GetExpressCheckoutDetails)\n    $paypalOrder = $orders->getOrder(['id' => $orderId])->getResult();\n    if ($paypalOrder->getStatus() !== 'APPROVED') {\n        http_response_code(400); echo json_encode(['error' => 'Order not approved or in unexpected state: ' . $paypalOrder->getStatus()]); exit;\n    }\n\n    // Capture the order (replaces DoExpressCheckoutPayment)\n    $captureResponse = $orders->captureOrder(['id' => $orderId, 'prefer' => 'return=representation']);\n    $captureResult = $captureResponse->getResult();\n\n    $captureId = $captureResult->getPurchaseUnits()[0]->getPayments()->getCaptures()[0]->getId();\n    $payerEmail = $captureResult->getPayer()->getEmailAddress() ?? '';\n\n    $order['status'] = 'PAID';\n    $order['payer_id'] = $paypalOrder->getPayer()->getPayerId() ?? ''; // Store payer ID if available\n    $order['transaction_id'] = $captureId;\n    $order['payer_email'] = $payerEmail;\n    orders_save($order);\n    echo json_encode(['ok' => true, 'transactionId' => $order['transaction_id'], 'amount' => $order['amount']]);\n\n} catch (ApiException $e) {\n    http_response_code(502);\n    $error_message = 'payment failed';\n    if ($e->getResponse() && $e->getResponse()->getBody()) {\n        $error_data = json_decode($e->getResponse()->getBody(), true);\n        $error_message = $error_data['details'][0]['description'] ?? $error_data['message'] ?? $error_message;\n    }\n    echo json_encode(['error' => $error_message]);\n    exit;\n}\n",
+        "changes": [
+          "Replaced `paypal_nvp` with `PaypalServerSdkLib` classes and `getPaypalClient()`.",
+          "Implemented replay guard: if order status is already 'PAID', return existing transaction details.",
+          "Called `$orders->getOrder()` to retrieve order details and check its status.",
+          "Called `$orders->captureOrder()` to capture the approved order.",
+          "Extracted `captureId` from the capture response (replaces `PAYMENTINFO_0_TRANSACTIONID`).",
+          "Extracted `payerEmail` from the order details (replaces `EMAIL`).",
+          "Updated `orders_save()` with the new status, `transaction_id` (capture ID), and `payer_email`.",
+          "Added `ApiException` handling for PayPal API errors, including `ORDER_ALREADY_CAPTURED` which is handled by the replay guard."
+        ]
+      },
+      {
+        "path": "api/orders.php",
+        "content": "<?php\n// Leftover \"admin\" helper from an old project: lists orders as JSON. (Note: no authentication.)\nrequire_once __DIR__ . '/../lib/orders_store.php';\nheader('Content-Type: application/json');\n\n// Security fix: Require admin authentication.\nif (!isset($_SERVER['HTTP_X_ADMIN_TOKEN']) || $_SERVER['HTTP_X_ADMIN_TOKEN'] !== getenv('ADMIN_TOKEN')) {\n    http_response_code(401);\n    echo json_encode(['error' => 'Unauthorized']);\n    exit;\n}\n\necho json_encode(array_values(orders_all()));\n",
+        "changes": [
+          "Added authentication check for `X-Admin-Token` header against `ADMIN_TOKEN` environment variable."
+        ]
+      },
+      {
+        "path": "api/refund.php",
+        "content": "<?php\n// Admin-style refund using the modern PayPal API.\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nrequire_once __DIR__ . '/../lib/orders_store.php';\nuse PaypalServerSdkLib\\ApiException;\n\nheader('Content-Type: application/json');\n\n// Security fix: Require admin authentication.\nif (!isset($_SERVER['HTTP_X_ADMIN_TOKEN']) || $_SERVER['HTTP_X_ADMIN_TOKEN'] !== getenv('ADMIN_TOKEN')) {\n    http_response_code(401);\n    echo json_encode(['error' => 'Unauthorized']);\n    exit;\n}\n\n$in = json_decode(file_get_contents('php://input'), true) ?: [];\n$order = orders_get($in['token'] ?? ''); // 'token' here is the PayPal Order ID\nif (!$order || $order['status'] !== 'PAID') { http_response_code(400); echo json_encode(['error' => 'order is not paid']); exit; }\n\n$payments = getPaypalClient()->getPaymentsController();\n\ntry {\n    // Refund by CAPTURE id (which is stored as 'transaction_id')\n    // Empty body means full refund\n    $refundResponse = $payments->refundCapturedPayment(['captureId' => $order['transaction_id'], 'prefer' => 'return=representation']);\n    $refundResult = $refundResponse->getResult();\n    $refundId = $refundResult->getId();\n\n    $order['status'] = 'REFUNDED';\n    $order['refund_id'] = $refundId;\n    orders_save($order);\n    echo json_encode(['ok' => true, 'refundId' => $order['refund_id']]);\n\n} catch (ApiException $e) {\n    http_response_code(502);\n    $error_message = 'refund failed';\n    if ($e->getResponse() && $e->getResponse()->getBody()) {\n        $error_data = json_decode($e->getResponse()->getBody(), true);\n        $error_message = $error_data['details'][0]['description'] ?? $error_data['message'] ?? $error_message;\n    }\n    echo json_encode(['error' => $error_message]);\n    exit;\n}\n",
+        "changes": [
+          "Replaced `paypal_nvp` with `PaypalServerSdkLib` classes and `getPaypalClient()`.",
+          "Added authentication check for `X-Admin-Token` header against `ADMIN_TOKEN` environment variable.",
+          "Called `$payments->refundCapturedPayment()` using the stored `transaction_id` (which is the capture ID).",
+          "Extracted `refundId` from the refund response (replaces `REFUNDTRANSACTIONID`).",
+          "Updated `orders_save()` with the new status and `refund_id`.",
+          "Added `ApiException` handling for PayPal API errors."
+        ]
+      },
+      {
+        "path": "config.php",
+        "content": "<?php\n// Legacy shop configuration (circa 2016). Deliberately typical of old PayPal integrations:\n// credentials live in code with fallback values, and the API is the classic NVP endpoint.\n\n// Security fix: Read credentials only from environment variables; fail loudly if missing.\n// Replaced NVP credentials with OAuth2 client ID and secret.\ndefine('PAYPAL_CLIENT_ID',     getenv('PAYPAL_CLIENT_ID')     ?: die('PAYPAL_CLIENT_ID environment variable not set'));\ndefine('PAYPAL_CLIENT_SECRET', getenv('PAYPAL_CLIENT_SECRET') ?: die('PAYPAL_CLIENT_SECRET environment variable not set'));\ndefine('PAYPAL_WEBHOOK_ID',    getenv('PAYPAL_WEBHOOK_ID')    ?: die('PAYPAL_WEBHOOK_ID environment variable not set'));\ndefine('ADMIN_TOKEN',          getenv('ADMIN_TOKEN')          ?: die('ADMIN_TOKEN environment variable not set'));\n\ndefine('SHOP_CURRENCY', 'USD');\ndefine('SHOP_BASE_URL', getenv('SHOP_BASE_URL') ?: 'http://localhost:8081');\ndefine('SHOP_RECEIVER_EMAIL', getenv('SHOP_RECEIVER_EMAIL') ?: 'sb-business@business.example.com');\n\n$PRODUCTS = [\n    'tee'    => ['name' => 'Cutover Tee',   'price' => '25.00'],\n    'mug'    => ['name' => 'Rollback Mug',  'price' => '12.50'],\n    'poster' => ['name' => 'Legacy Poster', 'price' => '18.00'],\n];\n",
+        "changes": [
+          "Removed `PAYPAL_API_USERNAME`, `PAYPAL_API_PASSWORD`, `PAYPAL_API_SIGNATURE`, `PAYPAL_NVP_ENDPOINT`, `PAYPAL_NVP_VERSION`, `PAYPAL_IPN_VERIFY_URL`.",
+          "Added `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, and `ADMIN_TOKEN` definitions.",
+          "Removed hardcoded fallback values for credentials; now `die()` if environment variables are not set."
+        ]
+      },
+      {
+        "path": "index.php",
+        "content": "<?php require_once __DIR__ . '/config.php'; ?>\n<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>Cutover Demo Shop (legacy PayPal)</title>\n<style>\n body{font-family:Georgia,serif;max-width:640px;margin:2rem auto;padding:0 1rem;color:#222}\n .item{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding:.6rem 0}\n input[type=number]{width:3.5rem}\n #total{font-size:1.3rem;margin:1rem 0}\n #result{margin-top:1rem;padding:.7rem;background:#eef;display:none}\n</style></head>\n<body>\n<h1>Cutover Demo Shop</h1>\n<p><em>A deliberately old PayPal integration: checkout.js v4 plus the NVP API.</em></p>\n<div id=\"items\">\n<?php foreach ($PRODUCTS as $sku => $p): ?>\n  <div class=\"item\"><span><?= htmlspecialchars($p['name']) ?> &mdash; $<?= $p['price'] ?></span>\n  <span>Qty <input type=\"number\" min=\"0\" value=\"<?= $sku === 'tee' ? 1 : 0 ?>\" data-sku=\"<?= $sku ?>\" data-price=\"<?= $p['price'] ?>\"></span></div>\n<?php endforeach; ?>\n</div>\n<div id=\"total\">Total: $<span id=\"amt\">0.00</span></div>\n<paypal-button id=\"paypal-button\"></paypal-button>\n<div id=\"result\"></div>\n\n<script src=\"https://www.sandbox.paypal.com/web-sdk/v6/core\"></script>\n<script>\nfunction cart() { var c = {}; document.querySelectorAll('input[data-sku]').forEach(function (i) { if (+i.value > 0) c[i.dataset.sku] = +i.value; }); return c; }\nfunction total() { var t = 0; document.querySelectorAll('input[data-sku]').forEach(function (i) { t += i.value * i.dataset.price; }); return t; }\nfunction refresh() { document.getElementById('amt').textContent = total().toFixed(2); }\ndocument.querySelectorAll('input[data-sku]').forEach(function (i) { i.addEventListener('input', refresh); }); refresh();\n\n(async () => {\n  const clientTokenResponse = await fetch('/api/client-token.php').then(res => res.json());\n  if (!clientTokenResponse.clientToken) {\n    console.error('Failed to get client token:', clientTokenResponse.error);\n    return;\n  }\n\n  const sdk = await window.paypal.createInstance({\n    clientToken: clientTokenResponse.clientToken,\n    components: ['paypal-payments'],\n    pageType: 'checkout'\n  });\n\n  const session = sdk.createPayPalOneTimePaymentSession({\n    async onApprove(data) {\n      const res = await fetch('/api/execute-payment.php', {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify({ token: data.orderId })\n      }).then(r => r.json());\n\n      var el = document.getElementById('result'); el.style.display = 'block';\n      el.textContent = res.ok ? 'Payment complete. Transaction ' + res.transactionId + ' for $' + res.amount : 'Payment failed: ' + (res.error || 'unknown');\n    },\n    onCancel() {\n      var el = document.getElementById('result'); el.style.display = 'block'; el.textContent = 'Payment cancelled.';\n    },\n    onError(err) {\n      var el = document.getElementById('result'); el.style.display = 'block'; el.textContent = 'Payment failed: ' + (err.message || 'unknown error');\n      console.error('PayPal SDK error:', err);\n    }\n  });\n\n  const paypalButton = document.getElementById('paypal-button');\n  paypalButton.addEventListener('click', async () => {\n    try {\n      await session.start({ presentationMode: 'auto' }, async () => {\n        const createOrderResponse = await fetch('/api/create-payment.php', {\n          method: 'POST',\n          headers: { 'Content-Type': 'application/json' },\n          body: JSON.stringify(cart())\n        }).then(r => r.json());\n        if (!createOrderResponse.token) {\n          throw new Error(createOrderResponse.error || 'Failed to create order');\n        }\n        return { orderId: createOrderResponse.token };\n      });\n    } catch (error) {\n      var el = document.getElementById('result'); el.style.display = 'block'; el.textContent = 'Payment failed: ' + (error.message || 'unknown error');\n      console.error('Error starting PayPal session:', error);\n    }\n  });\n})();\n</script>\n</body></html>\n",
+        "changes": [
+          "Replaced `<div id=\"paypal-button\"></div>` with `<paypal-button id=\"paypal-button\"></paypal-button>`.",
+          "Replaced `checkout.js v4` script with `JS SDK v6 core` script from `https://www.sandbox.paypal.com/web-sdk/v6/core`.",
+          "Added logic to fetch `clientToken` from `/api/client-token.php`.",
+          "Replaced `paypal.Button.render` with `window.paypal.createInstance` and `sdk.createPayPalOneTimePaymentSession`.",
+          "Updated `payment()` callback to `createOrder()` which now `POST`s to `/api/create-payment.php` and returns `{ orderId: data.token }`.",
+          "Updated `onAuthorize` callback to `onApprove` which now `POST`s `data.orderId` to `/api/execute-payment.php`.",
+          "Updated `onCancel` and `onError` callbacks to match JS SDK v6 signature and error handling.",
+          "Added an event listener to the `<paypal-button>` element to call `session.start()`."
+        ]
+      },
+      {
+        "path": "ipn.php",
+        "content": "<?php\n// This file is replaced by api/webhook.php for modern webhook handling.\n// It is kept as a placeholder but its functionality is deprecated.\nhttp_response_code(200);\n",
+        "changes": [
+          "Deprecated the IPN handler, replaced by `api/webhook.php`."
+        ]
+      },
+      {
+        "path": "lib/orders_store.php",
+        "content": "<?php\n// Tiny flat-file \"database\" for orders (legacy style).\nfunction orders_path() { return __DIR__ . '/../data/orders.json'; }\nfunction orders_all() {\n    $p = orders_path();\n    return file_exists($p) ? (json_decode(file_get_contents($p), true) ?: []) : [];\n}\nfunction orders_save(array $order) {\n    $all = orders_all();\n    $all[$order['token']] = $order;\n    file_put_contents(orders_path(), json_encode($all, JSON_PRETTY_PRINT));\n}\nfunction orders_get($token) { $a = orders_all(); return $a[$token] ?? null; }\n",
+        "changes": [
+          "No functional changes, but the 'token' key now stores the PayPal Order ID."
+        ]
+      },
+      {
+        "path": "lib/paypal_nvp.php",
+        "content": "<?php\n// This file is replaced by lib/paypal_sdk.php for modern PayPal API interactions.\n// It is kept as a placeholder but its functionality is deprecated.\n",
+        "changes": [
+          "Deprecated the NVP API client, replaced by `lib/paypal_sdk.php`."
+        ]
+      },
+      {
+        "path": "api/client-token.php",
+        "content": "<?php\n// Endpoint to mint a client token for the PayPal JS SDK v6.\nrequire_once __DIR__ . '/../config.php';\n\nheader('Content-Type: application/json');\n\n$clientId = PAYPAL_CLIENT_ID;\n$clientSecret = PAYPAL_CLIENT_SECRET;\n\n$ch = curl_init('https://api-m.sandbox.paypal.com/v1/oauth2/token');\ncurl_setopt($ch, CURLOPT_HTTPHEADER, [\n    'Accept: application/json',\n    'Accept-Language: en_US'\n]);\ncurl_setopt($ch, CURLOPT_USERPWD, $clientId . ':' . $clientSecret);\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\ncurl_setopt($ch, CURLOPT_POST, true);\ncurl_setopt($ch, CURLOPT_POSTFIELDS, 'grant_type=client_credentials&response_type=client_token&intent=sdk_init');\n\n$response = curl_exec($ch);\n$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);\ncurl_close($ch);\n\nif ($httpCode === 200) {\n    $data = json_decode($response, true);\n    echo json_encode(['clientToken' => $data['access_token']]);\n} else {\n    http_response_code(500);\n    echo json_encode(['error' => 'Failed to get client token', 'details' => $response]);\n}\n",
+        "changes": [
+          "New file: Endpoint to generate a client token for the PayPal JS SDK v6.",
+          "Uses `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` from `config.php`.",
+          "Performs a cURL request to PayPal's OAuth2 token endpoint.",
+          "Returns the `access_token` as `clientToken` in JSON format."
+        ]
+      },
+      {
+        "path": "api/webhook.php",
+        "content": "<?php\n// PayPal Webhook listener (replaces IPN).\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nrequire_once __DIR__ . '/../lib/orders_store.php';\nuse PaypalServerSdkLib\\Models\\Builders\\WebhookVerifySignatureRequestBuilder;\nuse PaypalServerSdkLib\\ApiException;\n\nheader('Content-Type: application/json');\n\n$rawBody = file_get_contents('php://input');\n$headers = getallheaders();\n\n$webhookId = PAYPAL_WEBHOOK_ID;\n$payments = getPaypalClient()->getPaymentsController();\n\ntry {\n    $verifyRequest = WebhookVerifySignatureRequestBuilder::init(\n        $headers['Paypal-Transmission-Id'] ?? '',\n        $headers['Paypal-Transmission-Time'] ?? '',\n        $headers['Paypal-Transmission-Sig'] ?? '',\n        $headers['Paypal-Cert-Url'] ?? '',\n        $rawBody,\n        $webhookId\n    )->build();\n\n    $verification = $payments->verifyWebhookSignature(['body' => $verifyRequest])->getResult();\n\n    if ($verification->getVerificationStatus() !== 'SUCCESS') {\n        http_response_code(400);\n        echo json_encode(['error' => 'Webhook signature verification failed']);\n        exit;\n    }\n\n    $event = json_decode($rawBody, true);\n    $eventType = $event['event_type'] ?? '';\n    $eventId = $event['id'] ?? '';\n\n    // CUTOVER-REVIEW: Webhook replay guard needs persistent storage for event IDs.\n    // For now, we'll process, but a real system would store $eventId and check for duplicates.\n\n    if ($eventType === 'PAYMENT.CAPTURE.COMPLETED') {\n        $captureId = $event['resource']['id'] ?? null;\n        $amountValue = $event['resource']['amount']['value'] ?? null;\n        $currencyCode = $event['resource']['amount']['currency_code'] ?? null;\n        $orderId = $event['resource']['supplementary_data']['related_resources'][0]['order']['id'] ?? null;\n\n        if ($captureId && $orderId && $amountValue && $currencyCode) {\n            $order = orders_get($orderId);\n\n            if ($order && $order['transaction_id'] === $captureId && $order['amount'] === $amountValue && $order['status'] !== 'PAID') {\n                $order['status'] = 'PAID';\n                orders_save($order);\n                // Log successful processing\n                error_log(\"Webhook PAYMENT.CAPTURE.COMPLETED processed for Order ID: $orderId, Capture ID: $captureId\");\n            } else if ($order && $order['status'] === 'PAID') {\n                // Already processed, ignore duplicate\n                error_log(\"Webhook PAYMENT.CAPTURE.COMPLETED (duplicate) ignored for Order ID: $orderId, Capture ID: $captureId\");\n            } else {\n                // Mismatch or unknown order\n                error_log(\"Webhook PAYMENT.CAPTURE.COMPLETED received for unknown or mismatched order. Event ID: $eventId\");\n            }\n        } else {\n            error_log(\"Webhook PAYMENT.CAPTURE.COMPLETED missing required data. Event ID: $eventId\");\n        }\n    }\n\n    http_response_code(200);\n    echo json_encode(['status' => 'success']);\n\n} catch (ApiException $e) {\n    http_response_code(500);\n    error_log('PayPal Webhook API Exception: ' . $e->getMessage());\n    echo json_encode(['error' => 'Internal server error during webhook processing']);\n} catch (Exception $e) {\n    http_response_code(500);\n    error_log('General Webhook Exception: ' . $e->getMessage());\n    echo json_encode(['error' => 'Internal server error']);\n}\n",
+        "changes": [
+          "New file: Webhook listener to replace IPN.",
+          "Uses `PAYPAL_WEBHOOK_ID` from `config.php`.",
+          "Verifies webhook signature using `$payments->verifyWebhookSignature()`.",
+          "Handles `PAYMENT.CAPTURE.COMPLETED` events.",
+          "Extracts `captureId`, `amount`, `currency`, and `orderId` from the webhook event.",
+          "Matches the webhook event to a stored order by `orderId` and `transaction_id` (capture ID).",
+          "Updates the order status to 'PAID' if the event matches and the order is not already paid.",
+          "Includes basic logging for webhook processing."
+        ]
+      },
+      {
+        "path": "lib/paypal_sdk.php",
+        "content": "<?php\n// PayPal Server SDK client setup.\nrequire_once __DIR__ . '/../vendor/autoload.php';\nrequire_once __DIR__ . '/../config.php';\n\nuse PaypalServerSdkLib\\PaypalServerSdkClientBuilder;\nuse PaypalServerSdkLib\\Authentication\\ClientCredentialsAuthCredentialsBuilder;\nuse PaypalServerSdkLib\\Environment;\n\nfunction getPaypalClient() {\n    static $client = null;\n    if ($client === null) {\n        $client = PaypalServerSdkClientBuilder::init()\n            ->clientCredentialsAuthCredentials(ClientCredentialsAuthCredentialsBuilder::init(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET))\n            ->environment(Environment::SANDBOX)->build();\n    }\n    return $client;\n}\n",
+        "changes": [
+          "New file: Centralized setup for the PayPal PHP Server SDK.",
+          "Initializes `PaypalServerSdkClientBuilder` with `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` from `config.php`.",
+          "Configures the SDK for the `SANDBOX` environment.",
+          "Provides a `getPaypalClient()` function to retrieve a singleton instance of the SDK client."
+        ]
+      }
+    ],
+    "flags": [
+      "CUTOVER-REVIEW: In `lib/orders_store.php`, the order data is stored under the web root (`data/orders.json`). This is a medium security finding. For production, data should be stored outside the web root or in a database.",
+      "CUTOVER-REVIEW: In `api/webhook.php`, a robust webhook replay guard needs persistent storage for processed event IDs to prevent duplicate processing. The current implementation only checks against the order's existing status, but a dedicated store for webhook event IDs is recommended for full idempotency."
+    ]
+  }
+}

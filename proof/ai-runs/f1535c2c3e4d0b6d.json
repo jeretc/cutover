@@ -1,0 +1,16 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "at": "2026-10-14T06:51:45.943Z",
+  "json": {
+    "files": [
+      {
+        "path": "ipn.php",
+        "content": "<?php\nrequire_once __DIR__ . '/lib/paypal_sdk.php';\nrequire_once __DIR__ . '/lib/orders_store.php';\n$webhookId = getenv('PAYPAL_WEBHOOK_ID');\nif (!$webhookId) { http_response_code(500); echo json_encode(['error' => 'webhook config missing']); exit; }\n$headers = getallheaders();\n$payload = file_get_contents('php://input');\n$res = $client->getNotificationsController()->verifyWebhookSignature(['body' => [\n    'auth_algo' => $headers['PAYPAL-AUTH-ALGO'] ?? '',\n    'cert_url' => $headers['PAYPAL-CERT-URL'] ?? '',\n    'transmission_id' => $headers['PAYPAL-TRANSMISSION-ID'] ?? '',\n    'transmission_sig' => $headers['PAYPAL-TRANSMISSION-SIG'] ?? '',\n    'transmission_time' => $headers['PAYPAL-TRANSMISSION-TIME'] ?? '',\n    'webhook_id' => $webhookId,\n    'webhook_event' => json_decode($payload, true)\n]]);\nif ($res->getResult()->getVerificationStatus() === 'SUCCESS') {\n    $event = json_decode($payload, true);\n    if ($event['event_type'] === 'PAYMENT.CAPTURE.COMPLETED') {\n        $capture = $event['resource'];\n        $orderId = $capture['supplementary_data']['related_ids']['order_id'] ?? null;\n        if ($orderId) {\n            $order = orders_get($orderId);\n            if ($order && $order['status'] !== 'PAID') {\n                $order['status'] = 'PAID';\n                $order['transaction_id'] = $capture['id'];\n                orders_save($order);\n            }\n        }\n    }\n}\nhttp_response_code(200);",
+        "changes": [
+          "Verified webhook signature using the NotificationsController as required by the grounding."
+        ]
+      }
+    ],
+    "flags": []
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "at": "2026-10-14T06:56:54.056Z",
+  "json": {
+    "files": [
+      {
+        "path": "index.php",
+        "content": "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>Cutover Demo Shop</title>\n<script src=\"https://www.sandbox.paypal.com/web-sdk/v6/core\"></script>\n</head><body>\n<input type=\"number\" data-sku=\"tee\" value=\"1\">\n<input type=\"number\" data-sku=\"mug\" value=\"0\">\n<input type=\"number\" data-sku=\"poster\" value=\"0\">\n<paypal-button id=\"paypal-button\" type=\"pay\"></paypal-button>\n<div id=\"result\"></div>\n<script>\nasync function createOrder() {\n  const cart = {};\n  document.querySelectorAll('input[data-sku]').forEach(i => cart[i.dataset.sku] = i.value);\n  const res = await fetch('/api/create-payment.php', { method: 'POST', body: JSON.stringify(cart) });\n  const data = await res.json();\n  return { orderId: data.id };\n}\n(async () => {\n  const tokenRes = await fetch('/api/client-token.php');\n  const { clientToken } = await tokenRes.json();\n  const sdk = await window.paypal.createInstance({ clientToken, components: ['paypal-payments'], pageType: 'checkout' });\n  const session = sdk.createPayPalOneTimePaymentSession({\n    async onApprove(data) {\n      const res = await fetch('/api/execute-payment.php', { method: 'POST', body: JSON.stringify({ orderId: data.orderId }) });\n      const json = await res.json();\n      document.getElementById('result').style.display = 'block';\n      document.getElementById('result').textContent = json.ok ? `Payment complete. Transaction ${json.transactionId} for $${json.amount}` : `Payment failed: ${json.error}`;\n    },\n    onCancel() { document.getElementById('result').style.display = 'block'; document.getElementById('result').textContent = 'Payment cancelled.'; },\n    onError(err) { document.getElementById('result').style.display = 'block'; document.getElementById('result').textContent = 'Payment failed: ' + err; }\n  });\n  document.getElementById('paypal-button').addEventListener('click', () => session.start({ presentationMode: 'popup' }, createOrder()));\n})();\n</script></body></html>",
+        "changes": [
+          "Added missing cart quantity inputs with data-sku attributes",
+          "Changed paypal-button to web component",
+          "Fixed session.start() to be called synchronously inside click handler with the promise"
+        ]
+      }
+    ],
+    "flags": [
+      "The webhook handler (ipn.php) needs implementation of the capture matching logic using the stored orders.json file."
+    ]
+  }
+}

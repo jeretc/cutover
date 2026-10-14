@@ -1,0 +1,66 @@
+{
+  "label": "live-legacy",
+  "shop": "http://localhost:8080/legacy",
+  "at": "2026-10-14T07:24:21.115Z",
+  "scenarios": {
+    "S1-single-item": {
+      "title": "Buy one tee",
+      "pass": false,
+      "summary": "no confirm button"
+    },
+    "S2-multi-item": {
+      "title": "Buy 1 tee + 2 mugs (25.00 + 2 x 12.50)",
+      "pass": true,
+      "summary": "shop: paid 50.00; PayPal: Completed 50.00 USD",
+      "outcome": {
+        "shop": "paid",
+        "amount": "50.00",
+        "paypalStatus": "Completed",
+        "paypalAmount": "50.00",
+        "currency": "USD"
+      }
+    },
+    "S3-buyer-cancels": {
+      "title": "Buyer cancels at PayPal",
+      "pass": true,
+      "summary": "shop shows: Payment cancelled.",
+      "outcome": {
+        "shop": "cancelled"
+      }
+    },
+    "S4-refund": {
+      "title": "Refund the second order in full",
+      "pass": true,
+      "summary": "refund HTTP 200; PayPal now says Refunded",
+      "outcome": {
+        "refundHttp": 200,
+        "paypalStatus": "Refunded"
+      }
+    },
+    "S5-refund-twice": {
+      "title": "Refunding an already refunded order is refused",
+      "pass": true,
+      "summary": "second refund HTTP 400 (order is not paid)",
+      "outcome": {
+        "refundHttp": 400
+      }
+    },
+    "S6-double-execute": {
+      "title": "Replaying the payment confirmation for a paid order does not charge twice",
+      "pass": true,
+      "summary": "replay HTTP 502: refused (The PayerID value is invalid.)",
+      "outcome": {
+        "noSecondCharge": true,
+        "behaviour": "refuses"
+      }
+    },
+    "S7-empty-cart": {
+      "title": "Creating a payment with an empty cart is rejected",
+      "pass": true,
+      "summary": "HTTP 400 (empty cart)",
+      "outcome": {
+        "http": 400
+      }
+    }
+  }
+}

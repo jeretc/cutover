@@ -1,0 +1,26 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "at": "2026-10-14T06:57:52.561Z",
+  "json": {
+    "files": [
+      {
+        "path": "index.php",
+        "content": "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>Cutover Demo Shop</title>\n<script src=\"https://www.sandbox.paypal.com/web-sdk/v6/core\"></script>\n</head><body>\n<input type=\"number\" data-sku=\"tee\" value=\"1\">\n<input type=\"number\" data-sku=\"mug\" value=\"0\">\n<input type=\"number\" data-sku=\"poster\" value=\"0\">\n<paypal-button id=\"paypal-button\" type=\"pay\"></paypal-button>\n<div id=\"result\"></div>\n<script>\nasync function createOrder() {\n  const cart = {};\n  document.querySelectorAll('input[data-sku]').forEach(i => cart[i.dataset.sku] = i.value);\n  const res = await fetch('/api/create-payment.php', { method: 'POST', body: JSON.stringify(cart) });\n  const data = await res.json();\n  return { orderId: data.id };\n}\n(async () => {\n  const tokenRes = await fetch('/api/client-token.php');\n  const { clientToken } = await tokenRes.json();\n  const sdk = await window.paypal.createInstance({ clientToken, components: ['paypal-payments'], pageType: 'checkout' });\n  const session = sdk.createPayPalOneTimePaymentSession({\n    async onApprove(data) {\n      const res = await fetch('/api/execute-payment.php', { method: 'POST', body: JSON.stringify({ orderId: data.orderId }) });\n      const json = await res.json();\n      document.getElementById('result').style.display = 'block';\n      document.getElementById('result').textContent = json.ok ? `Payment complete. Transaction ${json.transactionId} for $${json.amount}` : `Payment failed: ${json.error}`;\n    },\n    onCancel() { document.getElementById('result').style.display = 'block'; document.getElementById('result').textContent = 'Payment cancelled.'; },\n    onError(err) { document.getElementById('result').style.display = 'block'; document.getElementById('result').textContent = 'Payment failed: ' + err; }\n  });\n  document.getElementById('paypal-button').addEventListener('click', () => session.start({ presentationMode: 'popup' }, createOrder()));\n})();\n</script></body></html>",
+        "changes": [
+          "Removed async/await from the click handler to ensure session.start() is called synchronously.",
+          "Passed the createOrder() promise directly to session.start() as required by JS SDK v6."
+        ]
+      },
+      {
+        "path": "api/client-token.php",
+        "content": "<?php\nrequire_once __DIR__ . '/../lib/paypal_sdk.php';\nheader('Content-Type: application/json');\n$ch = curl_init('https://api-m.sandbox.paypal.com/v1/oauth2/token');\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\ncurl_setopt($ch, CURLOPT_USERPWD, getenv('PAYPAL_CLIENT_ID') . ':' . getenv('PAYPAL_CLIENT_SECRET'));\ncurl_setopt($ch, CURLOPT_POSTFIELDS, 'grant_type=client_credentials&response_type=client_token&intent=sdk_init');\n$res = json_decode(curl_exec($ch), true);\ncurl_close($ch);\nif (!isset($res['access_token'])) { http_response_code(500); echo json_encode(['error' => 'token failure']); exit; }\necho json_encode(['clientToken' => $res['access_token']]);",
+        "changes": [
+          "Added error handling for token retrieval to prevent returning HTML/PHP errors to the browser."
+        ]
+      }
+    ],
+    "flags": [
+      "Ensure the server environment has PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET set, as the SDK requires them and the code no longer falls back."
+    ]
+  }
+}
