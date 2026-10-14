@@ -11,8 +11,18 @@ fetch("/api/demo-buyer").then((r) => r.json()).then((b) => {
 function pollFeed() {
   fetch("/api/recent-orders").then((r) => r.json()).then((rows) => {
     $("#feed").hidden = false;
+    const paid = (shop) => rows.find((o) => o.mine && o.shop === shop && o.transaction && o.paypal);
+    const po = paid("Old shop"), pn = paid("Migrated shop");
+    const done = { old: !!po, new: !!pn, cmp: !!(po && pn) };
+    document.querySelectorAll("#steps3 li").forEach((li) => li.classList.toggle("done", done[li.dataset.s]));
+    const v = $("#verdict"); v.hidden = false;
+    const same = po && pn && po.paypal.split(" ")[0] === pn.paypal.split(" ")[0];
+    v.className = "verdict" + (po && pn ? (same ? " vgo" : " vno") : "");
+    v.innerHTML = po && pn
+      ? `<div class="vh">${same ? "SAME OUTCOME" : "DIFFERENT OUTCOME"}<small>${same ? "different code" : "check the rows below"}</small></div><div class="vb"><div><b>Old shop</b>PayPal says: ${esc(po.paypal)}<span>${esc(po.code.stack)}</span></div><div><b>Migrated shop</b>PayPal says: ${esc(pn.paypal)}<span>${esc(pn.code.stack)}</span></div></div>`
+      : `<div class="vh wait">WAITING FOR PAYMENTS</div><div class="vb"><div>${po ? "Old shop paid. Now pay in the migrated shop." : pn ? "Migrated shop paid. Now pay in the old shop." : "Pay once in each shop. Your verdict appears here, based on your own payments."}</div></div>`;
     $("#feed-body").innerHTML = rows.length
-      ? `<table><thead><tr><th>Shop</th><th>Amount</th><th>Status</th><th>Transaction</th></tr></thead><tbody>${rows.map((o) => `<tr><td>${esc(o.shop)}</td><td>$${esc(o.amount)}</td><td><span class="chip ${o.status === "PAID" ? "ok" : o.status === "REFUNDED" ? "medium" : "inferred"}">${esc(o.status)}</span></td><td>${esc(o.transaction || "-")}</td></tr>`).join("")}</tbody></table>`
+      ? `<table><thead><tr><th>Shop</th><th>Amount</th><th>Status</th><th>PayPal says</th><th>Code path</th><th>Transaction</th></tr></thead><tbody>${rows.map((o) => `<tr><td data-l="Shop">${esc(o.shop)}${o.mine ? ' <span class="you">you</span>' : ""}</td><td data-l="Amount">$${esc(o.amount)}</td><td data-l="Status"><span class="chip ${o.status === "PAID" ? "ok" : o.status === "REFUNDED" ? "medium" : "inferred"}">${esc(o.status === "CREATED" ? "NOT PAID" : o.status)}</span></td><td data-l="PayPal says">${esc(o.paypal || (o.transaction ? "checking..." : "-"))}</td><td data-l="Code path" class="cp"><b>${esc(o.code.stack)}</b><span>${esc(o.code.calls)}</span></td><td data-l="Transaction" class="tx">${esc(o.transaction || "-")}</td></tr>`).join("")}</tbody></table>`
       : `<div class="empty">No payments yet. Open a shop, pay with the sandbox buyer, and it appears here.</div>`;
   }).catch(() => {});
 }
@@ -34,9 +44,9 @@ fetch("data/cutover.json").then((r) => r.json()).then((d) => {
     .withParams({ fontFamily: "IBM Plex Mono, monospace", fontSize: 13, accentColor: "#ff5a1f", borderRadius: 0, wrapperBorderRadius: 0, headerFontWeight: 600, backgroundColor: "#12161b", foregroundColor: "#eceff3", headerBackgroundColor: "#1d242d", borderColor: "#2a313a" }, "dark");
   const sevOrder = ["critical", "high", "medium", "low"];
   const tpCols = [
-    { field: "id", headerName: "ID", width: 80 },
-    { field: "file", headerName: "File", flex: 1.1, minWidth: 150 },
-    { field: "line", headerName: "Line", width: 80 },
+    { field: "id", headerName: "ID", width: 90 },
+    { field: "file", headerName: "File", flex: 1.2, minWidth: 210 },
+    { field: "line", headerName: "Line", width: 100 },
     { field: "legacy", headerName: "Today (legacy)", flex: 1.3, minWidth: 190 },
     { field: "modern", headerName: "Becomes (modern)", flex: 2, minWidth: 240, tooltipField: "modern" },
     { field: "confidence", headerName: "Mapping", width: 130, cellRenderer: (p) => chip(p.value) },
@@ -80,7 +90,9 @@ fetch("data/cutover.json").then((r) => r.json()).then((d) => {
   const show = (i) => {
     const f = d.files[i];
     list.querySelectorAll(".file").forEach((b, k) => b.setAttribute("aria-current", k === i));
-    $("#notes").innerHTML = f.notes.length ? `<b>What changed:</b> ${f.notes.map(esc).join(" · ")}` : f.status === "removed" ? "Retired: the legacy NVP client is no longer referenced by any file." : "Rewritten by the agent.";
+    const clean = (t) => String(t).replace(/`/g, "").replace(/^CUTOVER-REVIEW:\s*/, "").trim();
+    const items = f.notes.flatMap((n) => String(n).split(/ · |\. (?=[A-Z])/)).map(clean).filter(Boolean);
+    $("#notes").innerHTML = items.length ? `<b>What changed</b><ul>${items.map((n) => `<li>${esc(n.replace(/\.$/, ""))}</li>`).join("")}</ul>` : f.status === "removed" ? "Retired: the legacy NVP client is no longer referenced by any file." : "Rewritten by the agent.";
     let html = "";
     for (const op of f.ops) for (const ln of op.v.replace(/\n$/, "").split("\n"))
       html += `<div class="${op.t === "+" ? "a" : op.t === "-" ? "d" : ""}"><span class="n">${op.t === " " ? " " : op.t === "-" ? "−" : "+"}</span>${esc(ln) || " "}</div>`;
@@ -88,8 +100,17 @@ fetch("data/cutover.json").then((r) => r.json()).then((d) => {
   };
   list.onclick = (e) => { const b = e.target.closest(".file"); if (b) show(+b.dataset.i); };
   show(Math.max(0, d.files.findIndex((f) => f.path === "api/execute-payment.php")));
-  $("#flags").innerHTML = `<h3>Left for a human to decide</h3><ul>${d.flags.map((f) => `<li>${esc(f)}</li>`).join("")}${d.securityAfter.map((x) => `<li>${esc(x.title)} (${esc(x.file)}): ${esc(x.fix)}</li>`).join("")}</ul>`;
+  const seen = new Set();
+  const flagItems = d.flags.map((f) => String(f).replace(/`/g, "").replace(/^CUTOVER-REVIEW:\s*/, "").trim()).filter((f) => {
+    const k = f.toLowerCase().slice(0, 60);
+    if (seen.has(k) || (/web root/i.test(f) && d.securityAfter.length)) return false;
+    seen.add(k); return true;
+  });
+  const first = (t) => { const m = String(t).match(/^(.+?[.:])(\s|$)/); return m ? [m[1].replace(/[.:]$/, ""), String(t).slice(m[0].length)] : [t, ""]; };
+  const rows2 = [...flagItems.map((f) => ({ t: first(f), tag: "decide" })), ...d.securityAfter.map((x) => ({ t: [`${x.title} (${x.file})`, x.fix], tag: "security" }))];
+  $("#flags").innerHTML = `<h3>Left for a human to decide</h3><p class="lead2">The agent does not guess. Anything it could not map with confidence is listed here, and a developer decides before merging.</p><ol>${rows2.map((r) => `<li><span class="ftag ${r.tag}">${r.tag}</span><div><b>${esc(r.t[0])}</b>${r.t[1] ? `<small>${esc(r.t[1])}</small>` : ""}</div></li>`).join("")}</ol>`;
 
+  $("#runfacts").textContent = `Recorded run: ${d.summary.models.join(", ")}, ${d.summary.repairRounds} repair round${d.summary.repairRounds === 1 ? "" : "s"} before every check passed. Mistakes below come from this and earlier runs.`;
   // ---- mistakes ----
   $("#mist").innerHTML = d.mistakes.map((m) => `<article class="m"><h3>${esc(m.what)}</h3><p>${esc(m.detail)}</p><p><b>Caught by</b>${esc(m.caught)}</p><p class="v"><b>Fixed</b>${esc(m.fixed)}</p></article>`).join("");
 
@@ -100,3 +121,12 @@ fetch("data/cutover.json").then((r) => r.json()).then((d) => {
     return `<tr><td data-l="Scenario"><div class="id">${esc(s.id)}</div><div class="t">${esc(s.title)}</div></td><td data-l="Old shop" class="o">${out(s.legacy.outcome)}</td><td data-l="Migrated shop" class="o">${out(s.migrated.outcome)}</td><td data-l="Verdict"><span class="go ${same ? "" : "no"}">${same ? "GO · IDENTICAL" : "NO-GO"}</span></td></tr>`;
   }).join("") + `</tbody>`;
 });
+
+(function status() {
+  fetch("/api/status").then((r) => r.json()).then((st) => {
+    const el = $("#shopstate"); if (!el) return;
+    el.hidden = false; el.className = "shopstate " + (st.ready ? "up" : "starting");
+    el.textContent = st.ready ? "Both shops are up" : "Shops are starting, give it a few seconds";
+    if (!st.ready) setTimeout(status, 3000);
+  }).catch(() => {});
+})();

@@ -15,7 +15,7 @@ export function findPhp() {
 
 const ADMIN = "cutover-check-admin";
 
-export async function check(dir, port = 8090) {
+export async function check(dir, port = 8090, expectText = []) {
   const fails = [];
   const php = findPhp();
   const files = listFiles(dir).filter((f) => f.endsWith(".php"));
@@ -75,12 +75,26 @@ export async function check(dir, port = 8090) {
       await pg.waitForTimeout(3000);
       const btn = pg.locator("paypal-button").first();
       let opened = false;
+      await pg.evaluate(() => { const i = [...document.querySelectorAll("input[data-sku]")]; if (i.length && !i.some((x) => +x.value > 0)) { i[0].value = 1; i[0].dispatchEvent(new Event("input", { bubbles: true })); i[0].dispatchEvent(new Event("change", { bubbles: true })); } });
       if (await btn.count()) {
         const pop = bctx.waitForEvent("page", { timeout: 15000 }).then(async (p) => { await p.waitForLoadState("domcontentloaded").catch(() => {}); await pg.waitForTimeout(1500); return !p.isClosed() && /paypal\.com/.test(p.url()); }).catch(() => false);
         await btn.click().catch(() => {});
         opened = await pop;
       }
+      const shown = await pg.locator("body").innerText().catch(() => "");
+      const missing = expectText.filter((t) => !shown.includes(t));
+      if (missing.length) fails.push("the page lost visible content the legacy page showed (product names, prices, total). Not found on the page: " + missing.join(" | ") + ". Keep the same visible shop UI: product list with names and prices, quantity inputs, a live total, the result message area.");
       if (!opened) fails.push("clicking the PayPal button did not open the PayPal approval window. In JS SDK v6, session.start() must be called synchronously inside the click handler and receive the PROMISE returned by createOrder() (no await before it, not a function reference, not a resolved object).");
+      if (opened && !process.env.CUTOVER_SKIP_EMPTY_CHECK) {
+        const pg2 = await bctx.newPage();
+        await pg2.goto(base + "/", { waitUntil: "domcontentloaded" });
+        await pg2.waitForTimeout(3000);
+        await pg2.evaluate(() => document.querySelectorAll("input[data-sku]").forEach((x) => { x.value = 0; x.dispatchEvent(new Event("input", { bubbles: true })); x.dispatchEvent(new Event("change", { bubbles: true })); }));
+        await pg2.locator("paypal-button").first().click().catch(() => {});
+        await pg2.waitForTimeout(1500);
+        const msg = await pg2.locator("#result").evaluate((e) => (getComputedStyle(e).display !== "none" ? e.textContent.trim() : "")).catch(() => "");
+        if (!msg) fails.push("with an empty cart the buyer sees nothing after clicking the PayPal button. Show a visible message in #result (for example 'Payment failed: your cart is empty') and do not open PayPal or create an order; catch the rejected promise so no uncaught error is thrown.");
+      }
       await b.close();
       for (const e of [...new Set(errs)]) fails.push(`browser JavaScript error when loading the page and clicking the PayPal button: ${e}`);
     } catch (e) { fails.push(`browser smoke test could not run: ${String(e).slice(0, 120)}`); }

@@ -28,6 +28,25 @@ Rules:
 - Fix the security findings you are given (no credential fallbacks, authenticate the refund and order-list endpoints with a shared ADMIN_TOKEN environment variable sent in the X-Admin-Token header, replay guard on payment confirmation, verify webhooks).
 - Output STRICT JSON only: {"files":[{"path":"relative/path","content":"full file content","changes":["short bullet",...]}],"flags":["things a human must decide"]}. Include every file you changed or add. Do not include files that need no change.`;
 
+// models sometimes emit PHP namespaces like \Models inside JSON strings with a single backslash; double any backslash that is not a valid JSON escape
+const parseLoose = (t) => {
+  try { return JSON.parse(t); } catch {}
+  let out = "", inStr = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (!inStr) { if (c === '"') inStr = true; out += c; continue; }
+    if (c === '"') { inStr = false; out += c; continue; }
+    if (c === "\\") {
+      const n = t[i + 1];
+      if (n && '"\\/bfnrt'.includes(n)) { out += c + n; i++; }
+      else if (n === "u" && /^[0-9a-fA-F]{4}$/.test(t.slice(i + 2, i + 6))) { out += t.slice(i, i + 6); i += 5; }
+      else out += "\\\\";
+      continue;
+    }
+    out += c === "\n" ? "\\n" : c === "\r" ? "\\r" : c === "\t" ? "\\t" : c;
+  }
+  return JSON.parse(out);
+};
 async function gemini(prompt) {
   const hash = crypto.createHash("sha256").update(SYSTEM + prompt).digest("hex").slice(0, 16);
   const cf = `${CACHE}/${hash}.json`;
@@ -44,7 +63,7 @@ async function gemini(prompt) {
       const body = await r.json().catch(() => ({}));
       const text = body?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
       if (r.ok && text) {
-        try { const json = JSON.parse(text); const rec = { model, at: new Date().toISOString(), json }; fs.writeFileSync(cf, JSON.stringify(rec, null, 2)); return rec; }
+        try { const json = parseLoose(text); const rec = { model, at: new Date().toISOString(), json }; fs.writeFileSync(cf, JSON.stringify(rec, null, 2)); return rec; }
         catch (e) { last = `invalid JSON from ${model}`; fs.writeFileSync(`${CACHE}/invalid-${model}-${Date.now()}.txt`, text); console.log(`    ${last} (${text.length} chars, ends: ${JSON.stringify(text.slice(-60))})`); }
       } else { last = `${model} HTTP ${r.status}`; console.log(`    ${last}, retrying`); }
     }
@@ -62,6 +81,7 @@ const allFiles = listFiles(src).map(rel);
 fs.rmSync(out, { recursive: true, force: true });
 for (const f of allFiles) { fs.mkdirSync(path.dirname(path.join(out, f)), { recursive: true }); fs.copyFileSync(path.join(src, f), path.join(out, f)); }
 
+if (fs.existsSync(path.join(src, "assets"))) fs.cpSync(path.join(src, "assets"), path.join(out, "assets"), { recursive: true });
 fs.mkdirSync(path.join(out, "data"), { recursive: true });
 const migration = { at: new Date().toISOString(), source: src, out, calls: [], filesChanged: [], filesAdded: [], flags: [] };
 const targets = Object.keys(byFile).sort();
@@ -97,6 +117,9 @@ const apply = (res) => {
 };
 const syncVendor = () => { const v = new URL("./sdk-cache/vendor", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"); for (const f of ["composer.json", "composer.lock"]) { const sf = new URL("./sdk-cache/" + f, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"); if (fs.existsSync(sf)) fs.copyFileSync(sf, path.join(out, f)); } if (fs.existsSync(v) && !fs.existsSync(path.join(out, "vendor"))) fs.cpSync(v, path.join(out, "vendor"), { recursive: true }); };
 migration.rounds = [];
+const legacyIndex = fs.existsSync(path.join(src, "index.php")) ? fs.readFileSync(path.join(src, "index.php"), "utf8") : "";
+const legacyCfg = fs.existsSync(path.join(src, "config.php")) ? fs.readFileSync(path.join(src, "config.php"), "utf8") : "";
+const expectText = [...legacyCfg.matchAll(/'name'\s*=>\s*'([^']+)',\s*'price'\s*=>\s*'([\d.]+)'/g)].flatMap((m) => [m[1], "$" + m[2]]).concat(/Total/.test(legacyIndex) ? ["Total"] : []);
 console.log(`Migrating the whole shop (${allFiles.length} files)`);
 let res = await gemini(prompt);
 console.log(`  pass 1: ${res.cached ? "cached" : "AI"} (${res.model})`);
@@ -105,7 +128,7 @@ apply(res); for (const fl of res.json.flags || []) migration.flags.push({ flag: 
 syncVendor();
 const { check } = await import("./check.mjs");
 for (let round = 1; round <= 3; round++) {
-  const fails = await check(out);
+  const fails = await check(out, 8090, expectText);
   migration.rounds.push({ round, failures: fails });
   console.log(`  check ${round}: ${fails.length ? fails.length + " failure(s)" : "all contract and smoke checks pass"}`);
   fails.forEach((f) => console.log("    - " + f.slice(0, 160)));

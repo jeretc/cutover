@@ -1,0 +1,23 @@
+{
+  "model": "gemini-2.5-flash",
+  "at": "2026-10-14T10:07:17.602Z",
+  "json": {
+    "files": [
+      {
+        "path": "../migrated-php-shop-out/config.php",
+        "content": "<?php\n// Legacy shop configuration (circa 2016). Deliberately typical of old PayPal integrations:\n// credentials live in code with fallback values, and the API is the classic NVP endpoint.\n// Modern credentials (client ID/secret, webhook ID, admin token) are read from environment variables directly in the files that use them.\ndefine('SHOP_CURRENCY', 'USD');\ndefine('SHOP_BASE_URL', getenv('SHOP_BASE_URL') ?: 'http://localhost:8081');\n\n$PRODUCTS = [\n    'tee'    => ['name' => 'Cutover Tee',   'price' => '25.00'],\n    'mug'    => ['name' => 'Rollback Mug',  'price' => '12.50'],\n    'poster' => ['name' => 'Legacy Poster', 'price' => '18.00'],\n];\n",
+        "changes": [
+          "Removed commented-out legacy NVP API and IPN related constants."
+        ]
+      },
+      {
+        "path": "../migrated-php-shop-out/ipn.php",
+        "content": "<?php\n// This file is obsolete and has been replaced by webhook.php.\n",
+        "changes": [
+          "Removed all commented-out legacy IPN handling code, leaving only an obsolescence comment."
+        ]
+      }
+    ],
+    "flags": []
+  }
+}

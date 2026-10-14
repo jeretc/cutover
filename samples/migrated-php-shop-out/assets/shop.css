@@ -1,0 +1,40 @@
+:root{--paper:#f6f1e7;--card:#fffdf8;--ink:#1d2a24;--mute:#6b7168;--line:#e0d8c6;--green:#1f3a2e;--accent:#e8552b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif}
+.top{background:var(--green);color:#f6f1e7;font-size:13px;text-align:center;padding:7px 12px;letter-spacing:.04em}
+header.site{display:flex;align-items:center;justify-content:space-between;max-width:1040px;margin:0 auto;padding:18px 20px}
+.logo{font:700 24px Georgia,serif;letter-spacing:.02em;color:var(--green);text-decoration:none}
+.logo i{display:inline-block;width:14px;height:14px;background:var(--accent);transform:rotate(45deg);margin-right:10px;vertical-align:1px}
+header.site span{color:var(--mute);font-size:14px}
+.hero{max-width:1040px;margin:0 auto;padding:6px 20px 22px}
+.hero h1{font:700 40px/1.1 Georgia,serif;margin:0 0 6px;color:var(--green)}
+.hero p{margin:0;color:var(--mute);max-width:52ch}
+.layout{max-width:1040px;margin:0 auto;padding:0 20px 56px;display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start}
+.products{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden;display:flex;flex-direction:column}
+.card img{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:#e9dfcb}
+.card .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:2px}
+.card h3{margin:0;font:700 18px Georgia,serif}
+.card .price{color:var(--mute);font-size:15px}
+.card .qty{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--mute)}
+.card input[type=number]{width:64px;padding:7px 8px;font:inherit;color:var(--ink);border:1px solid var(--line);border-radius:4px;background:#fff}
+.summary{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px;position:sticky;top:16px}
+.summary h2{margin:0 0 10px;font:700 20px Georgia,serif}
+.summary .line{display:flex;justify-content:space-between;color:var(--mute);font-size:15px;padding:4px 0}
+#total,.summary .total{display:flex;justify-content:space-between;font-size:20px;font-weight:700;border-top:1px solid var(--line);margin:10px 0 14px;padding-top:12px;color:var(--ink)}
+#paypal-button{min-height:48px}
+#result{margin-top:14px;padding:12px;border-radius:4px;background:#eef3ec;border:1px solid #c9d8c5;display:none;font-size:14px;overflow-wrap:anywhere}
+.fine{color:var(--mute);font-size:12px;margin:12px 0 0}
+footer.site{border-top:1px solid var(--line);max-width:1040px;margin:0 auto;padding:18px 20px 40px;color:var(--mute);font-size:13px}
+@media (max-width:760px){
+.layout{grid-template-columns:1fr}.summary{position:static}
+header.site{padding:14px 16px}header.site span{display:none}.logo{font-size:21px}
+.hero{padding:2px 16px 18px}.hero h1{font-size:28px}
+.layout{padding:0 16px 40px}
+.products{grid-template-columns:1fr;gap:12px}
+.card{flex-direction:row;align-items:stretch}
+.card img{width:104px;height:auto;aspect-ratio:auto;flex:none;object-fit:cover}
+.card .body{flex:1;justify-content:center;padding:12px 14px}
+.card .qty{margin-top:8px}
+paypal-button,#paypal-button{display:block;width:100%}
+}

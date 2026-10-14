@@ -31,7 +31,7 @@ async function openShop(cart) {
   const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 }, locale: "en-US" });
   const page = await ctx.newPage();
   await page.goto(SHOP, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(4000);
   for (const [sku, qty] of Object.entries(cart)) await page.fill(`input[data-sku="${sku}"]`, String(qty));
   await page.waitForTimeout(300);
   return { ctx, page };

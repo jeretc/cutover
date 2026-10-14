@@ -1,12 +1,19 @@
 {
   "label": "live-legacy",
   "shop": "http://localhost:8080/legacy",
-  "at": "2026-10-14T07:24:21.115Z",
+  "at": "2026-10-14T12:26:54.469Z",
   "scenarios": {
     "S1-single-item": {
       "title": "Buy one tee",
-      "pass": false,
-      "summary": "no confirm button"
+      "pass": true,
+      "summary": "shop: paid 25.00; PayPal: Completed 25.00 USD",
+      "outcome": {
+        "shop": "paid",
+        "amount": "25.00",
+        "paypalStatus": "Completed",
+        "paypalAmount": "25.00",
+        "currency": "USD"
+      }
     },
     "S2-multi-item": {
       "title": "Buy 1 tee + 2 mugs (25.00 + 2 x 12.50)",
@@ -48,10 +55,10 @@
     "S6-double-execute": {
       "title": "Replaying the payment confirmation for a paid order does not charge twice",
       "pass": true,
-      "summary": "replay HTTP 502: refused (The PayerID value is invalid.)",
+      "summary": "replay HTTP 200: returned the SAME transaction (no second charge)",
       "outcome": {
         "noSecondCharge": true,
-        "behaviour": "refuses"
+        "behaviour": "returns-same-transaction"
       }
     },
     "S7-empty-cart": {

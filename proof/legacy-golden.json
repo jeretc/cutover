@@ -1,7 +1,7 @@
 {
-  "label": "legacy-golden",
-  "shop": "http://localhost:8081",
-  "at": "2026-10-14T05:52:58.721Z",
+  "label": "live-legacy",
+  "shop": "http://localhost:8080/legacy",
+  "at": "2026-10-14T10:09:17.285Z",
   "scenarios": {
     "S1-single-item": {
       "title": "Buy one tee",

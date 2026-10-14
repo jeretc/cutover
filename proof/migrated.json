@@ -1,7 +1,7 @@
 {
-  "label": "migrated",
-  "shop": "http://localhost:8081",
-  "at": "2026-10-14T07:01:22.371Z",
+  "label": "live-migrated",
+  "shop": "http://localhost:8080/shop",
+  "at": "2026-10-14T10:44:26.590Z",
   "scenarios": {
     "S1-single-item": {
       "title": "Buy one tee",
@@ -47,7 +47,7 @@
     "S5-refund-twice": {
       "title": "Refunding an already refunded order is refused",
       "pass": true,
-      "summary": "second refund HTTP 400 (order is not paid)",
+      "summary": "second refund HTTP 400 (order is not paid or does not exist)",
       "outcome": {
         "refundHttp": 400
       }
