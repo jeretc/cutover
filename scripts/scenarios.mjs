@@ -4,12 +4,14 @@
 // Output: proof/<label>.json (default label "legacy-golden"). Prints PASS/FAIL/INFO only; no credentials.
 import { chromium } from "playwright";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const SHOP = process.env.SHOP_URL || "http://localhost:8081";
 const LABEL = process.argv[2] || "legacy-golden";
 const { PAYPAL_BUYER_EMAIL: EMAIL, PAYPAL_BUYER_PASSWORD: PASS, PAYPAL_NVP_USER: NU, PAYPAL_NVP_PWD: NP, PAYPAL_NVP_SIGNATURE: NS } = process.env;
 if (!EMAIL || !PASS) { console.log("Missing buyer credentials in .env.local"); process.exit(1); }
-const shots = process.env.PROOF_SHOTS || "proof-shots";
+const shots = process.env.PROOF_SHOTS || path.join(os.tmpdir(), "cutover-proof-shots");
 fs.mkdirSync(shots, { recursive: true });
 fs.mkdirSync("proof", { recursive: true });
 const say = (s, m) => console.log(`${s.padEnd(5)} ${m}`);

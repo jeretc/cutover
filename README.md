@@ -38,6 +38,7 @@ Cutover day is the scariest day. Thousands of shops still run PayPal code writte
 - Crashed the whole shop when an optional webhook setting was missing.
 - Dropped the cart UI and cancel message (a cheaper fallback model).
 - Read the wrong field in the webhook event (order id at `related_resources` instead of `supplementary_data.related_ids.order_id`). Only a real sandbox webhook after deploy exposed it; the fact is now in the grounding and a static check guards it.
+- Looked for the PayPal signature headers by exact upper-case name. HTTP header names are case-insensitive and the demo server's proxy lowercases them, so the live handler answered 400 to every real webhook until the lookup was made case-insensitive (a human fix, found by another live sandbox payment).
 
 ### A trap only differential testing finds
 
@@ -104,7 +105,7 @@ npm run diff           # compare proof/legacy-golden.json with proof/migrated.js
 npm run build-web      # refresh the demo site data
 ```
 
-Every AI answer is cached in `proof/ai-runs/`, so the recorded migration can be replayed without an API key.
+Every AI answer from the recorded migration is kept in `proof/ai-runs/` as a record of what the model returned. Re-running `npm run migrate` needs your own Gemini key.
 
 ## Repository layout
 
