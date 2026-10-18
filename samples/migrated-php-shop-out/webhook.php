@@ -13,15 +13,16 @@ if (!$webhookId) {
 }
 
 $rawBody = file_get_contents('php://input');
-$headers = getallheaders();
+// CUTOVER-HUMAN-FIX: HTTP header names are case-insensitive and a proxy may lowercase them; match them case-insensitively.
+$headers = array_change_key_case(getallheaders(), CASE_LOWER);
 
 // Extract PayPal webhook headers
 $paypalHeaders = [
-    'PAYPAL-AUTH-ALGO'      => $headers['PAYPAL-AUTH-ALGO'] ?? $headers['Paypal-Auth-Algo'] ?? '',
-    'PAYPAL-CERT-URL'       => $headers['PAYPAL-CERT-URL'] ?? $headers['Paypal-Cert-Url'] ?? '',
-    'PAYPAL-TRANSMISSION-ID'=> $headers['PAYPAL-TRANSMISSION-ID'] ?? $headers['Paypal-Transmission-Id'] ?? '',
-    'PAYPAL-TRANSMISSION-SIG'=> $headers['PAYPAL-TRANSMISSION-SIG'] ?? $headers['Paypal-Transmission-Sig'] ?? '',
-    'PAYPAL-TRANSMISSION-TIME'=> $headers['PAYPAL-TRANSMISSION-TIME'] ?? $headers['Paypal-Transmission-Time'] ?? '',
+    'PAYPAL-AUTH-ALGO'      => $headers['paypal-auth-algo'] ?? '',
+    'PAYPAL-CERT-URL'       => $headers['paypal-cert-url'] ?? '',
+    'PAYPAL-TRANSMISSION-ID'=> $headers['paypal-transmission-id'] ?? '',
+    'PAYPAL-TRANSMISSION-SIG'=> $headers['paypal-transmission-sig'] ?? '',
+    'PAYPAL-TRANSMISSION-TIME'=> $headers['paypal-transmission-time'] ?? '',
 ];
 
 // Check if all required headers are present
